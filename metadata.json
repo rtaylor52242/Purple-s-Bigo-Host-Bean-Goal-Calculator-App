@@ -1,0 +1,5 @@
+{
+  "name": "Purple App",
+  "description": "A subscription-based web application to help Bigo Live hosts track events, manage bean goals, and receive personalized SMS reminders using AI-powered data extraction.",
+  "requestFramePermissions": []
+}
