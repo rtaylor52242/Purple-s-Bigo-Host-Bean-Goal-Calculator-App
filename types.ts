@@ -1,4 +1,3 @@
-
 export interface UserProfile {
   bigoUserId: string;
   phoneNumber: string;
@@ -20,7 +19,13 @@ export interface Event {
   slots: EventSlot[];
 }
 
+export interface DetectedSlot {
+  time: string; // "HH:MM"
+  duration: number; // in minutes
+}
+
 export interface OcrResult {
   eventName: string;
   estimatedPayout: number;
+  slots: DetectedSlot[];
 }

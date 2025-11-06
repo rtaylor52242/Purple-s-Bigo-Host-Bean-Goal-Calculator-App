@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { OcrResult } from "../types";
 
@@ -17,7 +16,13 @@ export async function extractEventDetailsFromImage(base64Image: string): Promise
     // Return mock data if API key is not available
     return new Promise(resolve => setTimeout(() => resolve({
         eventName: "Bigo Champions League",
-        estimatedPayout: 4638
+        estimatedPayout: 4638,
+        slots: [
+            { time: "10:00", duration: 60 },
+            { time: "11:00", duration: 60 },
+            { time: "13:00", duration: 45 },
+            { time: "15:00", duration: 90 },
+        ]
     }), 1500));
   }
 
@@ -33,7 +38,7 @@ export async function extractEventDetailsFromImage(base64Image: string): Promise
             },
           },
           {
-            text: "Analyze this screenshot from a mobile app event page. Extract the main event title or name, and the estimated reward or payout in 'beans'. The bean amount might be a single number or a range, if it's a range, provide the lowest number. Provide the response in JSON format.",
+            text: "Analyze this screenshot from a mobile app event page. Extract the main event title or name, the estimated reward or payout in 'beans', and all available time slots with their corresponding durations in minutes. The bean amount might be a single number or a range; if it's a range, provide the lowest number. Format the time in HH:MM. Provide the response in JSON format.",
           },
         ],
       },
@@ -50,8 +55,26 @@ export async function extractEventDetailsFromImage(base64Image: string): Promise
               type: Type.NUMBER,
               description: "The estimated reward in beans. If it's a range like '500-1000', use the lower value (500).",
             },
+            slots: {
+                type: Type.ARRAY,
+                description: "A list of available time slots for the event.",
+                items: {
+                    type: Type.OBJECT,
+                    properties: {
+                        time: {
+                            type: Type.STRING,
+                            description: "The start time of the slot in HH:MM format (e.g., '14:00')."
+                        },
+                        duration: {
+                            type: Type.NUMBER,
+                            description: "The duration of the event slot in minutes (e.g., 60)."
+                        }
+                    },
+                    required: ["time", "duration"],
+                }
+            }
           },
-          required: ["eventName", "estimatedPayout"],
+          required: ["eventName", "estimatedPayout", "slots"],
         },
       },
     });
@@ -61,7 +84,8 @@ export async function extractEventDetailsFromImage(base64Image: string): Promise
 
     if (
       typeof parsedResult.eventName === "string" &&
-      typeof parsedResult.estimatedPayout === "number"
+      typeof parsedResult.estimatedPayout === "number" &&
+      Array.isArray(parsedResult.slots)
     ) {
       return parsedResult as OcrResult;
     } else {

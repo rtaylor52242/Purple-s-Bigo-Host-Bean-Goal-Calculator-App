@@ -5,6 +5,7 @@ import { UserProfile, Event } from './types';
 import Header from './components/Header';
 import SettingsPage from './pages/SettingsPage';
 import AdminUploadPage from './pages/AdminUploadPage';
+import LoginPage from './pages/LoginPage';
 
 // Mock Data
 const initialUser: UserProfile = {
@@ -53,10 +54,16 @@ export const useAppContext = () => {
   return context;
 };
 
+const ProtectedRoute: React.FC<{ element: React.ReactElement }> = ({ element }) => {
+  const { isAuthenticated } = useAppContext();
+  return isAuthenticated ? element : <Navigate to="/login" replace />;
+};
+
+
 const App: React.FC = () => {
   const [user, setUser] = useState<UserProfile>(initialUser);
   const [events, setEvents] = useState<Event[]>(initialEvents);
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
 
   const contextValue: AppContextType = {
     user,
@@ -71,12 +78,13 @@ const App: React.FC = () => {
     <AppContext.Provider value={contextValue}>
       <HashRouter>
         <div className="min-h-screen bg-[#10101a] text-gray-200">
-          <Header />
+          {isAuthenticated && <Header />}
           <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
             <Routes>
-              <Route path="/" element={<Navigate to="/settings" replace />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route path="/admin-upload" element={<AdminUploadPage />} />
+              <Route path="/login" element={!isAuthenticated ? <LoginPage /> : <Navigate to="/settings" replace />} />
+              <Route path="/settings" element={<ProtectedRoute element={<SettingsPage />} />} />
+              <Route path="/admin-upload" element={<ProtectedRoute element={<AdminUploadPage />} />} />
+              <Route path="/" element={<Navigate to={isAuthenticated ? "/settings" : "/login"} replace />} />
             </Routes>
           </main>
         </div>
