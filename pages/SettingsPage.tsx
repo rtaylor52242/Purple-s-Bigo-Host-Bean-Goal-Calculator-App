@@ -2,6 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '../App';
 import { UserProfile } from '../types';
+import { formatTime } from '../utils/time';
 
 const SettingsPage: React.FC = () => {
   const { user, setUser, events } = useAppContext();
@@ -30,6 +31,15 @@ const SettingsPage: React.FC = () => {
     }
     setSelectedSlots(newSelectedSlots);
   };
+
+  const handleTimeFormatToggle = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const isStandard = e.target.checked;
+    const newFormat = isStandard ? 'standard' : 'military';
+    // Update the app state immediately for instant UI feedback
+    setUser(prev => ({...prev, timeFormat: newFormat}));
+    // Also update the local form state
+    setFormData(prev => ({...prev, timeFormat: newFormat}));
+  }
 
   const handleSave = () => {
     setUser({ ...formData, preferredSlots: selectedSlots });
@@ -87,10 +97,14 @@ const SettingsPage: React.FC = () => {
                  </div>
               </div>
             </div>
-            <div className="mt-6">
+            <div className="mt-6 space-y-3">
               <label className="flex items-center">
                 <input type="checkbox" name="enableSms" checked={formData.enableSms} onChange={handleInputChange} className="h-4 w-4 rounded bg-gray-700 border-gray-600 text-purple-600 focus:ring-purple-500" />
                 <span className="ml-2 text-gray-300">Enable SMS Reminders</span>
+              </label>
+               <label className="flex items-center">
+                <input type="checkbox" checked={formData.timeFormat === 'standard'} onChange={handleTimeFormatToggle} className="h-4 w-4 rounded bg-gray-700 border-gray-600 text-purple-600 focus:ring-purple-500" />
+                <span className="ml-2 text-gray-300">Use Standard (12-hr) Time</span>
               </label>
             </div>
           </div>
@@ -109,7 +123,7 @@ const SettingsPage: React.FC = () => {
                             <label key={slot.id} className="flex items-center justify-between p-3 bg-[#2a233a] rounded-md hover:bg-purple-900/50 cursor-pointer transition-colors">
                                 <div className="flex items-center">
                                     <input type="checkbox" checked={selectedSlots.has(slotIdentifier)} onChange={() => handleSlotToggle(slotIdentifier)} className="h-4 w-4 rounded bg-gray-700 border-gray-600 text-purple-600 focus:ring-purple-500" />
-                                    <span className="ml-3 text-gray-300">{slot.time} PST for {slot.duration}m</span>
+                                    <span className="ml-3 text-gray-300">{formatTime(slot.time, user.timeFormat)} PST for {slot.duration}m</span>
                                 </div>
                                 <span className="text-green-400 font-medium">~{slot.estimatedPayout.toLocaleString()} beans</span>
                             </label>

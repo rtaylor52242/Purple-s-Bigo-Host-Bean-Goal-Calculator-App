@@ -1,7 +1,9 @@
-import React, { useState, useCallback } from 'react';
+
+import React, { useState } from 'react';
 import { extractEventDetailsFromImage } from '../services/geminiService';
-import { Event, EventSlot, OcrResult } from '../types';
-import { useAppContext } from '../App';
+import { Event, EventSlot } from '../types';
+import { useAppContext, initialAdminUploadState } from '../App';
+import { formatTime } from '../utils/time';
 
 const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -20,62 +22,64 @@ const UploadIcon = () => (
 
 
 const AdminUploadPage: React.FC = () => {
-  const { setEvents } = useAppContext();
-  const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [ocrResult, setOcrResult] = useState<OcrResult | null>(null);
-  const [processedEvent, setProcessedEvent] = useState<Event | null>(null);
-  const [selectedOcrSlots, setSelectedOcrSlots] = useState<Set<string>>(new Set());
+  const { setEvents, user, adminUploadState, setAdminUploadState } = useAppContext();
+  const { file, preview, isLoading, error, ocrResult, processedEvent, selectedOcrSlots } = adminUploadState;
+  
+  // Modal and Zoom State (kept local as it's purely view-related)
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [scale, setScale] = useState(1);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [startDrag, setStartDrag] = useState({ x: 0, y: 0 });
   
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0];
-      setFile(selectedFile);
+      
+      // Clean up previous preview URL if it exists
+      if (preview) {
+        URL.revokeObjectURL(preview);
+      }
+
       const previewUrl = URL.createObjectURL(selectedFile);
-      setPreview(previewUrl);
-      resetResultState();
+      setAdminUploadState({
+        ...initialAdminUploadState, // Reset everything
+        file: selectedFile,         // Set the new file
+        preview: previewUrl,        // Set the new preview
+      });
     }
   };
 
   const removeImage = () => {
-    setFile(null);
-    setPreview(null);
-    resetResultState();
+    // Clean up preview URL to prevent memory leaks
+    if (preview) {
+      URL.revokeObjectURL(preview);
+    }
+    setAdminUploadState(initialAdminUploadState);
   };
   
-  const resetResultState = () => {
-    setOcrResult(null);
-    setProcessedEvent(null);
-    setError(null);
-    setSelectedOcrSlots(new Set());
-  }
-
   const handleOcrSlotToggle = (time: string) => {
-    setSelectedOcrSlots(prev => {
-        const newSet = new Set(prev);
+    setAdminUploadState(prev => {
+        const newSet = new Set(prev.selectedOcrSlots);
         if (newSet.has(time)) {
             newSet.delete(time);
         } else {
             newSet.add(time);
         }
-        return newSet;
+        return { ...prev, selectedOcrSlots: newSet };
     });
   };
 
   const handleProcess = async () => {
     if (!file) {
-      setError('Please upload a screenshot.');
+      setAdminUploadState(prev => ({...prev, error: 'Please upload a screenshot.'}));
       return;
     }
-    setIsLoading(true);
-    setError(null);
+    setAdminUploadState(prev => ({...prev, isLoading: true, error: null}));
+    
     try {
       const base64Image = await fileToBase64(file);
       const result = await extractEventDetailsFromImage(base64Image);
-      setOcrResult(result);
       
       const parsedSlots: EventSlot[] = result.slots.map((slot, index) => ({
             id: `${result.eventName.replace(/\s+/g, '-')}-${index}`,
@@ -88,14 +92,17 @@ const AdminUploadPage: React.FC = () => {
         throw new Error("No valid time slots were detected in the image. Please try another image.");
       }
 
-      // Pre-select all detected slots by default
-      setSelectedOcrSlots(new Set(result.slots.map(s => s.time)));
-      setProcessedEvent({ name: result.eventName, slots: parsedSlots });
+      setAdminUploadState(prev => ({
+        ...prev,
+        ocrResult: result,
+        processedEvent: { name: result.eventName, eventDates: result.eventDates, slots: parsedSlots },
+        selectedOcrSlots: new Set(result.slots.map(s => s.time)), // Pre-select all
+      }));
 
     } catch (err: any) {
-      setError(err.message || 'Failed to process image. Please try again.');
+      setAdminUploadState(prev => ({ ...prev, error: err.message || 'Failed to process image. Please try again.'}));
     } finally {
-      setIsLoading(false);
+      setAdminUploadState(prev => ({ ...prev, isLoading: false }));
     }
   };
 
@@ -125,6 +132,49 @@ const AdminUploadPage: React.FC = () => {
     }
   };
 
+  // --- Modal and Zoom handlers ---
+  const openModal = () => setIsModalOpen(true);
+  
+  const closeModal = () => {
+    setIsModalOpen(false);
+    handleResetZoom();
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+    setStartDrag({ x: e.clientX - position.x, y: e.clientY - position.y });
+  };
+
+  const handleMouseUp = () => setIsDragging(false);
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging) return;
+    e.preventDefault();
+    setPosition({
+      x: e.clientX - startDrag.x,
+      y: e.clientY - startDrag.y,
+    });
+  };
+
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const zoomFactor = 1.1;
+    if (e.deltaY < 0) {
+      setScale((prev) => Math.min(prev * zoomFactor, 5));
+    } else {
+      setScale((prev) => Math.max(prev / zoomFactor, 0.5));
+    }
+  };
+
+  const handleZoomIn = () => setScale((prev) => Math.min(prev * 1.2, 5));
+  const handleZoomOut = () => setScale((prev) => Math.max(prev / 1.2, 0.5));
+  const handleResetZoom = () => {
+    setScale(1);
+    setPosition({ x: 0, y: 0 });
+  };
+
+
   return (
     <div className="flex flex-col items-center">
       <div className="w-full max-w-2xl">
@@ -153,7 +203,7 @@ const AdminUploadPage: React.FC = () => {
                     src={preview} 
                     alt="Event preview" 
                     className="w-auto max-h-60 mx-auto rounded-md cursor-pointer hover:opacity-80 transition-opacity"
-                    onClick={() => setIsModalOpen(true)}
+                    onClick={openModal}
                 />
                 <button onClick={removeImage} className="absolute top-2 right-2 bg-red-600/80 text-white rounded-full p-1 text-xs hover:bg-red-700">
                   Remove
@@ -173,10 +223,19 @@ const AdminUploadPage: React.FC = () => {
           
           {processedEvent && ocrResult && (
             <div className="border-t border-gray-700 pt-6 space-y-4">
-                 <p className="text-center text-gray-300">
-                    Event detected: <span className="font-bold text-purple-400">{processedEvent.name}</span> with est. payout of <span className="font-bold text-green-400">{processedEvent.slots[0].estimatedPayout.toLocaleString()} beans</span>.
-                </p>
-                <h3 className="text-lg font-medium text-white text-center">Select Available Time Slots</h3>
+                 <div className="text-center">
+                    <p className="text-gray-300">
+                        Event detected: <span className="font-bold text-purple-400">{processedEvent.name}</span>
+                    </p>
+                    <p className="text-gray-300">
+                        Est. payout of <span className="font-bold text-green-400">{processedEvent.slots[0].estimatedPayout.toLocaleString()} beans</span>
+                    </p>
+                    <p className="text-sm text-gray-400 mt-1">
+                        Dates: <span className="font-semibold text-gray-300">{processedEvent.eventDates}</span>
+                    </p>
+                 </div>
+
+                <h3 className="text-lg font-medium text-white text-center pt-2">Select Available Time Slots</h3>
                 <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
                     {ocrResult.slots.map(slot => (
                         <label key={slot.time} className="flex items-center justify-between p-3 bg-[#2a233a] rounded-md hover:bg-purple-900/50 cursor-pointer transition-colors">
@@ -186,7 +245,7 @@ const AdminUploadPage: React.FC = () => {
                                 checked={selectedOcrSlots.has(slot.time)}
                                 onChange={() => handleOcrSlotToggle(slot.time)}
                                 className="h-4 w-4 rounded bg-gray-700 border-gray-600 text-purple-600 focus:ring-purple-500" />
-                              <span className="ml-3 text-gray-300">{slot.time} PST</span>
+                              <span className="ml-3 text-gray-300">{formatTime(slot.time, user.timeFormat)} PST</span>
                            </div>
                            <span className="text-gray-400">{slot.duration} minutes</span>
                         </label>
@@ -203,28 +262,48 @@ const AdminUploadPage: React.FC = () => {
       {isModalOpen && preview && (
         <div 
             className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4"
-            onClick={() => setIsModalOpen(false)}
+            onClick={closeModal}
+            onWheel={handleWheel}
             role="dialog"
             aria-modal="true"
             aria-label="Image preview enlarged"
         >
-            <div 
-                className="relative" 
-                onClick={(e) => e.stopPropagation()} // Prevents modal from closing when clicking on the image container
-            >
+          <div 
+            className="relative w-full h-full flex items-center justify-center" 
+            onClick={(e) => e.stopPropagation()}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+          >
+            <div className="w-full h-full overflow-hidden">
                 <img 
                     src={preview} 
                     alt="Event preview enlarged" 
-                    className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl" 
+                    className="absolute top-0 left-0 transition-transform duration-100"
+                    style={{
+                        transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
+                        cursor: isDragging ? 'grabbing' : 'grab',
+                        maxWidth: 'none',
+                        maxHeight: 'none',
+                    }}
+                    onMouseDown={handleMouseDown}
                 />
-                <button 
-                    onClick={() => setIsModalOpen(false)}
-                    className="absolute -top-3 -right-3 bg-white text-gray-800 rounded-full h-8 w-8 flex items-center justify-center text-2xl font-bold leading-none hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-white"
-                    aria-label="Close image zoom"
-                >
-                    &times;
-                </button>
             </div>
+            
+            <div className="absolute bottom-5 left-1/2 -translate-x-1/2 bg-black/50 rounded-full p-2 flex items-center gap-2 z-10">
+                <button onClick={handleZoomOut} className="w-10 h-10 text-white text-2xl rounded-full bg-white/20 hover:bg-white/30">-</button>
+                <button onClick={handleResetZoom} className="px-4 h-10 text-white text-sm rounded-full bg-white/20 hover:bg-white/30">Reset</button>
+                <button onClick={handleZoomIn} className="w-10 h-10 text-white text-2xl rounded-full bg-white/20 hover:bg-white/30">+</button>
+            </div>
+
+            <button 
+                onClick={closeModal}
+                className="absolute top-4 right-4 bg-white text-gray-800 rounded-full h-8 w-8 flex items-center justify-center text-2xl font-bold leading-none hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-white z-10"
+                aria-label="Close image zoom"
+            >
+                &times;
+            </button>
+          </div>
         </div>
       )}
     </div>

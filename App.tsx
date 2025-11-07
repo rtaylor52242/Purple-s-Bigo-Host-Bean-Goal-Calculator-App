@@ -1,7 +1,7 @@
 
 import React, { useState, createContext, useContext } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { UserProfile, Event } from './types';
+import { UserProfile, Event, AdminUploadState } from './types';
 import Header from './components/Header';
 import SettingsPage from './pages/SettingsPage';
 import AdminUploadPage from './pages/AdminUploadPage';
@@ -15,11 +15,13 @@ const initialUser: UserProfile = {
   currentBeanCount: 150000,
   monthlyBeanGoal: 500000,
   preferredSlots: new Set(['October Bean Spree|10:00|60', 'Weekend Bonanza|14:00|45']),
+  timeFormat: 'military',
 };
 
 const initialEvents: Event[] = [
   {
     name: 'October Bean Spree',
+    eventDates: '10/01 - 10/31',
     slots: [
       { id: 'obs-1', time: '10:00', duration: 60, estimatedPayout: 5000 },
       { id: 'obs-2', time: '11:00', duration: 60, estimatedPayout: 5000 },
@@ -28,12 +30,24 @@ const initialEvents: Event[] = [
   },
   {
     name: 'Weekend Bonanza',
+    eventDates: 'Every Weekend',
     slots: [
       { id: 'wb-1', time: '14:00', duration: 45, estimatedPayout: 7500 },
       { id: 'wb-2', time: '16:00', duration: 45, estimatedPayout: 7500 },
     ],
   },
 ];
+
+export const initialAdminUploadState: AdminUploadState = {
+  file: null,
+  preview: null,
+  isLoading: false,
+  error: null,
+  ocrResult: null,
+  processedEvent: null,
+  selectedOcrSlots: new Set(),
+};
+
 
 // App Context
 interface AppContextType {
@@ -43,6 +57,8 @@ interface AppContextType {
   setEvents: React.Dispatch<React.SetStateAction<Event[]>>;
   isAuthenticated: boolean;
   setIsAuthenticated: React.Dispatch<React.SetStateAction<boolean>>;
+  adminUploadState: AdminUploadState;
+  setAdminUploadState: React.Dispatch<React.SetStateAction<AdminUploadState>>;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -64,6 +80,8 @@ const App: React.FC = () => {
   const [user, setUser] = useState<UserProfile>(initialUser);
   const [events, setEvents] = useState<Event[]>(initialEvents);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [adminUploadState, setAdminUploadState] = useState<AdminUploadState>(initialAdminUploadState);
+
 
   const contextValue: AppContextType = {
     user,
@@ -72,6 +90,8 @@ const App: React.FC = () => {
     setEvents,
     isAuthenticated,
     setIsAuthenticated,
+    adminUploadState,
+    setAdminUploadState,
   };
 
   return (

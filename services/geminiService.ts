@@ -15,13 +15,12 @@ export async function extractEventDetailsFromImage(base64Image: string): Promise
     console.log("Using mock data because API key is not available.");
     // Return mock data if API key is not available
     return new Promise(resolve => setTimeout(() => resolve({
-        eventName: "Bigo Champions League",
-        estimatedPayout: 4638,
+        eventName: "55% Auto Rebate",
+        eventDates: "11/08-11/11; 11/15-11/18",
+        estimatedPayout: 38500,
         slots: [
-            { time: "10:00", duration: 60 },
-            { time: "11:00", duration: 60 },
-            { time: "13:00", duration: 45 },
-            { time: "15:00", duration: 90 },
+            { time: "16:00", duration: 20 },
+            { time: "17:00", duration: 20 },
         ]
     }), 1500));
   }
@@ -38,7 +37,7 @@ export async function extractEventDetailsFromImage(base64Image: string): Promise
             },
           },
           {
-            text: "Analyze this screenshot from a mobile app event page. Extract the main event title or name, the estimated reward or payout in 'beans', and all available time slots with their corresponding durations in minutes. The bean amount might be a single number or a range; if it's a range, provide the lowest number. Format the time in HH:MM. Provide the response in JSON format.",
+            text: "Analyze this event screenshot. Extract: 1. The main event title. 2. The event run dates as a string (e.g., '11/08-11/11'). 3. The maximum reward or payout in 'beans'. 4. All available time slots. If a time range is given (e.g., '4 PM - 6 PM'), create hourly slots within that range (4 PM, 5 PM). 5. The required participation duration in minutes (e.g., 'at least 20 mins'). This duration should be applied to all extracted time slots. Format time in HH:MM. Provide the response as JSON.",
           },
         ],
       },
@@ -51,9 +50,13 @@ export async function extractEventDetailsFromImage(base64Image: string): Promise
               type: Type.STRING,
               description: "The main title of the event.",
             },
+            eventDates: {
+              type: Type.STRING,
+              description: "The dates or date range of the event, e.g., '11/08-11/11; 11/15-11/18'."
+            },
             estimatedPayout: {
               type: Type.NUMBER,
-              description: "The estimated reward in beans. If it's a range like '500-1000', use the lower value (500).",
+              description: "The estimated reward in beans. Use the maximum value if multiple are listed.",
             },
             slots: {
                 type: Type.ARRAY,
@@ -63,18 +66,18 @@ export async function extractEventDetailsFromImage(base64Image: string): Promise
                     properties: {
                         time: {
                             type: Type.STRING,
-                            description: "The start time of the slot in HH:MM format (e.g., '14:00')."
+                            description: "The start time of the slot in HH:MM format (e.g., '16:00')."
                         },
                         duration: {
                             type: Type.NUMBER,
-                            description: "The duration of the event slot in minutes (e.g., 60)."
+                            description: "The required participation duration in minutes (e.g., 20)."
                         }
                     },
                     required: ["time", "duration"],
                 }
             }
           },
-          required: ["eventName", "estimatedPayout", "slots"],
+          required: ["eventName", "eventDates", "estimatedPayout", "slots"],
         },
       },
     });
@@ -84,6 +87,7 @@ export async function extractEventDetailsFromImage(base64Image: string): Promise
 
     if (
       typeof parsedResult.eventName === "string" &&
+      typeof parsedResult.eventDates === "string" &&
       typeof parsedResult.estimatedPayout === "number" &&
       Array.isArray(parsedResult.slots)
     ) {

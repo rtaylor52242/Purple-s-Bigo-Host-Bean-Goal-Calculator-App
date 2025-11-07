@@ -1,3 +1,4 @@
+
 export interface UserProfile {
   bigoUserId: string;
   phoneNumber: string;
@@ -5,6 +6,7 @@ export interface UserProfile {
   currentBeanCount: number;
   monthlyBeanGoal: number;
   preferredSlots: Set<string>;
+  timeFormat: 'military' | 'standard';
 }
 
 export interface EventSlot {
@@ -16,6 +18,7 @@ export interface EventSlot {
 
 export interface Event {
   name: string;
+  eventDates: string;
   slots: EventSlot[];
 }
 
@@ -26,6 +29,17 @@ export interface DetectedSlot {
 
 export interface OcrResult {
   eventName: string;
+  eventDates: string;
   estimatedPayout: number;
   slots: DetectedSlot[];
+}
+
+export interface AdminUploadState {
+  file: File | null;
+  preview: string | null;
+  isLoading: boolean;
+  error: string | null;
+  ocrResult: OcrResult | null;
+  processedEvent: Event | null;
+  selectedOcrSlots: Set<string>;
 }
