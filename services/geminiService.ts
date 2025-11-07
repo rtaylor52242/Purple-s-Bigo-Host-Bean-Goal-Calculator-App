@@ -1,30 +1,11 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { OcrResult } from "../types";
 
-const API_KEY = process.env.API_KEY;
-
-if (!API_KEY) {
-  // This is a fallback for development. In a real environment, the key should be set.
-  console.warn("Gemini API key not found. Using a placeholder. Please set process.env.API_KEY.");
-}
-
-const ai = new GoogleGenAI({ apiKey: API_KEY || "YOUR_API_KEY_HERE" });
+// FIX: Per coding guidelines, initialize GoogleGenAI directly with process.env.API_KEY.
+// The API key is a hard requirement and fallbacks or mock data should not be used.
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export async function extractEventDetailsFromImage(base64Image: string): Promise<OcrResult> {
-  if (!API_KEY) {
-    console.log("Using mock data because API key is not available.");
-    // Return mock data if API key is not available
-    return new Promise(resolve => setTimeout(() => resolve({
-        eventName: "55% Auto Rebate",
-        eventDates: "11/08-11/11; 11/15-11/18",
-        estimatedPayout: 38500,
-        slots: [
-            { time: "16:00", duration: 20 },
-            { time: "17:00", duration: 20 },
-        ]
-    }), 1500));
-  }
-
   try {
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
@@ -37,7 +18,7 @@ export async function extractEventDetailsFromImage(base64Image: string): Promise
             },
           },
           {
-            text: "Analyze this event screenshot. Extract: 1. The main event title. 2. The event run dates as a string (e.g., '11/08-11/11'). 3. The maximum reward or payout in 'beans'. 4. All available time slots. If a time range is given (e.g., '4 PM - 6 PM'), create hourly slots within that range (4 PM, 5 PM). 5. The required participation duration in minutes (e.g., 'at least 20 mins'). This duration should be applied to all extracted time slots. Format time in HH:MM. Provide the response as JSON.",
+            text: "Analyze this event screenshot. Extract: 1. The main event title. 2. The event run dates as a string (e.g., '11/08-11/11'). 3. The maximum reward or payout in 'beans'. 4. All available time slots. If a time range is given (e.g., '4 PM - 6 PM'), create slots for every 30 minutes within that range (e.g., 4:00 PM, 4:30 PM, 5:00 PM, 5:30 PM). 5. The required participation duration in minutes (e.g., 'at least 20 mins'). This duration should be applied to all extracted time slots. Format time in HH:MM. Provide the response as JSON.",
           },
         ],
       },

@@ -135,7 +135,9 @@ const AdminUploadPage: React.FC = () => {
 
       const selectedDateSlots = Array.from(selectedOcrSlots)
         .map(id => selectedSlotsById[id])
-        // Fix: Use a type predicate to correctly narrow the array type from (DateTimeSlot | undefined)[] to DateTimeSlot[].
+        // FIX: The error on line 137 was caused by `selectedOcrSlots` being `Set<unknown>`. While that's fixed in `App.tsx`,
+        // this `.map` operation can produce `undefined` values. A type predicate is used here to correctly narrow the array
+        // type from `(DateTimeSlot | undefined)[]` to `DateTimeSlot[]`, preventing potential errors in the `.reduce` call below.
         .filter((slot): slot is DateTimeSlot => Boolean(slot));
 
       if (selectedDateSlots.length === 0) {
@@ -303,7 +305,7 @@ const AdminUploadPage: React.FC = () => {
 
                 <h3 className="text-lg font-medium text-white text-center pt-2">Select Available Time Slots</h3>
                 <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
-                    {dateTimeSlots.map((slot, index) => {
+                    {dateTimeSlots.map(slot => {
                         const formattedDate = `${slot.date.getUTCMonth() + 1}/${slot.date.getUTCDate()}/${slot.date.getUTCFullYear()}`;
                         const rewardInfo = getRewardTier(processedEvent.slots[0]?.estimatedPayout || 0);
                         return (
@@ -315,10 +317,7 @@ const AdminUploadPage: React.FC = () => {
                                         checked={selectedOcrSlots.has(slot.id)}
                                         onChange={() => handleOcrSlotToggle(slot.id)}
                                         className="h-4 w-4 rounded bg-gray-700 border-gray-600 text-purple-600 focus:ring-purple-500" />
-                                    <span className="ml-3 text-gray-300 text-sm">
-                                        <span className="inline-block w-6 text-right mr-2 text-gray-400">{index + 1}.</span>
-                                        {formattedDate} - at - {formatTime(slot.time, user.timeFormat)} PST - for - {slot.duration} minutes
-                                    </span>
+                                    <span className="ml-3 text-gray-300 text-sm">{formattedDate} - at - {formatTime(slot.time, user.timeFormat)} PST - for - {slot.duration} minutes</span>
                                 </div>
                                 </label>
                                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs p-3 bg-[#10101a] border border-gray-700 text-white text-sm rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">

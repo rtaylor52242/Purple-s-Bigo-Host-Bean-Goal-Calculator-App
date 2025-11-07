@@ -45,7 +45,8 @@ export const initialAdminUploadState: AdminUploadState = {
   error: null,
   ocrResult: null,
   processedEvent: null,
-  // Fix: Explicitly specify the generic type for new Set() to avoid it being inferred as Set<unknown>, which caused the error in AdminUploadPage.tsx.
+  // FIX: Explicitly specify the generic type for new Set() to avoid it being inferred as Set<unknown>.
+  // This was the root cause for the error in AdminUploadPage.tsx on line 137.
   selectedOcrSlots: new Set<string>(),
 };
 

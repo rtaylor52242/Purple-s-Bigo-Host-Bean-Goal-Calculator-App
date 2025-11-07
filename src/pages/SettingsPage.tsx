@@ -58,7 +58,8 @@ const SettingsPage: React.FC = () => {
 
   const handleClearAll = () => {
     if (window.confirm('Are you sure you want to clear all your selected event preferences?')) {
-      // Fix: Explicitly specify the generic type for new Set() to avoid it being inferred as Set<unknown>, which causes a downstream type error.
+      // FIX: Explicitly specify the generic type for new Set() to avoid it being inferred as Set<unknown>.
+      // When an empty Set was used, the type of `selectedSlots` became `Set<unknown>`, causing a type error on line 157 when using its items as map keys.
       setSelectedSlots(new Set<string>());
     }
   };
@@ -138,18 +139,8 @@ const SettingsPage: React.FC = () => {
             
             {selectedSlots.size > 0 && (
               <div className="mb-6">
-                <div className="flex justify-between items-center mb-3 border-b border-gray-700 pb-2">
-                  <h3 className="text-lg font-medium text-purple-400">Your Selections</h3>
-                  <button
-                    onClick={handleClearAll}
-                    disabled={selectedSlots.size === 0}
-                    className="px-2 py-1 text-xs font-medium text-red-400 bg-transparent rounded hover:bg-red-900/50 transition-colors focus:outline-none"
-                    aria-label="Remove all selected events"
-                  >
-                    REMOVE ALL
-                  </button>
-                </div>
-                <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
+                <h3 className="text-lg font-medium text-purple-400 mb-3 border-b border-gray-700 pb-2">Your Selections</h3>
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-2 mt-3">
                     {Array.from(selectedSlots).sort().map(identifier => {
                         const details = slotDetailsMap.get(identifier);
                         if (!details) return null;
@@ -179,51 +170,44 @@ const SettingsPage: React.FC = () => {
 
             <div className="flex flex-wrap gap-2 mb-4">
               <button onClick={handleSelectAll} className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700 transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500">
-                Select All Slots
+                Select All
               </button>
               <button onClick={handleClearAll} className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500" disabled={selectedSlots.size === 0}>
-                Deselect All Slots
+                Clear All
               </button>
             </div>
 
             <h3 className="text-lg font-medium text-purple-400 mt-6 mb-2">All Available Slots</h3>
             <div className="space-y-6 max-h-96 overflow-y-auto pr-2">
-              {(() => {
-                let slotCounter = 0;
-                return events.map(event => (
-                  <div key={event.name}>
-                    <h4 className="text-md font-medium text-purple-400 mb-2">{event.name}</h4>
-                    <div className="space-y-2">
-                      {event.slots.map(slot => {
-                          slotCounter++;
-                          const slotIdentifier = `${event.name}|${slot.time}|${slot.duration}`;
-                          const rewardInfo = getRewardTier(slot.estimatedPayout);
-                          return (
-                              <div key={slot.id} className="relative group">
-                                  <label className="flex items-center justify-between p-3 bg-[#2a233a] rounded-md hover:bg-purple-900/50 cursor-pointer transition-colors">
-                                      <div className="flex items-center">
-                                          <input type="checkbox" checked={selectedSlots.has(slotIdentifier)} onChange={() => handleSlotToggle(slotIdentifier)} className="h-4 w-4 rounded bg-gray-700 border-gray-600 text-purple-600 focus:ring-purple-500" />
-                                          <span className="ml-3 text-gray-300">
-                                            <span className="inline-block w-6 text-right mr-2 text-gray-400">{slotCounter}.</span>
-                                            {formatTime(slot.time, user.timeFormat)} PST for {slot.duration}m
-                                          </span>
-                                      </div>
-                                      <span className="text-green-400 font-medium">~{slot.estimatedPayout.toLocaleString()} beans</span>
-                                  </label>
-                                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs p-3 bg-[#10101a] border border-gray-700 text-white text-sm rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                                      <h4 className="font-bold text-purple-400">{rewardInfo.tier}</h4>
-                                      <p className="text-xs text-gray-300 mb-2">{rewardInfo.description}</p>
-                                      <ul className="list-disc list-inside text-xs space-y-1">
-                                          {rewardInfo.rewards.map((reward, i) => <li key={i}>{reward}</li>)}
-                                      </ul>
-                                  </div>
-                              </div>
-                          )
-                      })}
-                    </div>
+              {events.map(event => (
+                <div key={event.name}>
+                  <h4 className="text-md font-medium text-purple-400 mb-2">{event.name}</h4>
+                  <div className="space-y-2">
+                    {event.slots.map(slot => {
+                        const slotIdentifier = `${event.name}|${slot.time}|${slot.duration}`;
+                        const rewardInfo = getRewardTier(slot.estimatedPayout);
+                        return (
+                            <div key={slot.id} className="relative group">
+                                <label className="flex items-center justify-between p-3 bg-[#2a233a] rounded-md hover:bg-purple-900/50 cursor-pointer transition-colors">
+                                    <div className="flex items-center">
+                                        <input type="checkbox" checked={selectedSlots.has(slotIdentifier)} onChange={() => handleSlotToggle(slotIdentifier)} className="h-4 w-4 rounded bg-gray-700 border-gray-600 text-purple-600 focus:ring-purple-500" />
+                                        <span className="ml-3 text-gray-300">{formatTime(slot.time, user.timeFormat)} PST for {slot.duration}m</span>
+                                    </div>
+                                    <span className="text-green-400 font-medium">~{slot.estimatedPayout.toLocaleString()} beans</span>
+                                </label>
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs p-3 bg-[#10101a] border border-gray-700 text-white text-sm rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                                    <h4 className="font-bold text-purple-400">{rewardInfo.tier}</h4>
+                                    <p className="text-xs text-gray-300 mb-2">{rewardInfo.description}</p>
+                                    <ul className="list-disc list-inside text-xs space-y-1">
+                                        {rewardInfo.rewards.map((reward, i) => <li key={i}>{reward}</li>)}
+                                    </ul>
+                                </div>
+                            </div>
+                        )
+                    })}
                   </div>
-                ))
-              })()}
+                </div>
+              ))}
             </div>
           </div>
         </div>
