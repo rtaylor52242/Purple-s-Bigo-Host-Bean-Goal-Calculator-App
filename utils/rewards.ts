@@ -6,20 +6,8 @@ export interface RewardTier {
 }
 
 export const getRewardTier = (beans: number): RewardTier => {
-  // Add specific reward structure based on the event screenshot provided.
-  // This is triggered when the maximum payout is exactly 2,400 beans.
-  if (beans === 2400) {
-    return {
-      tier: 'Reward Structure',
-      description: 'The maximum reward you can receive is 2,400 beans reward.',
-      rewards: [
-        'lv.1 - if 1,000 beans received, get 600 beans reward',
-        'lv.2 - if 2,500 beans received, get extra 900 beans reward',
-        'lv.3 - if 5,000 beans received, get extra 900 beans reward',
-      ],
-    };
-  }
-
+  // This function now serves as a fallback for events that might not have
+  // a detailed reward structure provided by the Gemini API.
   if (beans >= 7500) {
     return { 
       tier: 'Gold Tier', 

@@ -1,8 +1,7 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { OcrResult } from "../types";
 
-// FIX: Per coding guidelines, initialize GoogleGenAI directly with process.env.API_KEY.
-// The API key is a hard requirement and fallbacks or mock data should not be used.
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export async function extractEventDetailsFromImage(base64Image: string): Promise<OcrResult> {
@@ -18,7 +17,7 @@ export async function extractEventDetailsFromImage(base64Image: string): Promise
             },
           },
           {
-            text: "Analyze this event screenshot. Extract: 1. The main event title. 2. The event run dates as a string (e.g., '11/08-11/11'). 3. The maximum reward or payout in 'beans'. 4. All available time slots. If a time range is given (e.g., '4 PM - 6 PM'), create slots for every 30 minutes within that range (e.g., 4:00 PM, 4:30 PM, 5:00 PM, 5:30 PM). 5. The required participation duration in minutes (e.g., 'at least 20 mins'). This duration should be applied to all extracted time slots. Format time in HH:MM. Provide the response as JSON.",
+            text: "Analyze this event screenshot. Extract: 1. The main event title. 2. The event run dates as a string (e.g., '11/08-11/11'). 3. A list of all reward tiers, including the level number and the beans rewarded. 4. All available time slots. If a time range is given (e.g., '4 PM - 6 PM'), create slots for every 30 minutes within that range. 5. The required participation duration in minutes. This duration should apply to all slots. Format time in HH:MM. Provide the response as JSON.",
           },
         ],
       },
@@ -35,9 +34,27 @@ export async function extractEventDetailsFromImage(base64Image: string): Promise
               type: Type.STRING,
               description: "The dates or date range of the event, e.g., '11/08-11/11; 11/15-11/18'."
             },
-            estimatedPayout: {
-              type: Type.NUMBER,
-              description: "The estimated reward in beans. Use the maximum value if multiple are listed.",
+            rewardTiers: {
+              type: Type.ARRAY,
+              description: "A list of reward tiers for the event.",
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  level: {
+                    type: Type.NUMBER,
+                    description: "The level of the reward tier, e.g., 1."
+                  },
+                  beans: {
+                    type: Type.NUMBER,
+                    description: "The number of beans awarded for this tier."
+                  },
+                   description: {
+                    type: Type.STRING,
+                    description: "A brief description of the tier's requirements if available."
+                  }
+                },
+                required: ["level", "beans"]
+              }
             },
             slots: {
                 type: Type.ARRAY,
@@ -58,7 +75,7 @@ export async function extractEventDetailsFromImage(base64Image: string): Promise
                 }
             }
           },
-          required: ["eventName", "eventDates", "estimatedPayout", "slots"],
+          required: ["eventName", "eventDates", "rewardTiers", "slots"],
         },
       },
     });
@@ -69,9 +86,11 @@ export async function extractEventDetailsFromImage(base64Image: string): Promise
     if (
       typeof parsedResult.eventName === "string" &&
       typeof parsedResult.eventDates === "string" &&
-      typeof parsedResult.estimatedPayout === "number" &&
+      Array.isArray(parsedResult.rewardTiers) &&
       Array.isArray(parsedResult.slots)
     ) {
+      // Sort tiers by bean count ascending
+      parsedResult.rewardTiers.sort((a: any, b: any) => a.beans - b.beans);
       return parsedResult as OcrResult;
     } else {
       throw new Error("Invalid data format received from Gemini API.");

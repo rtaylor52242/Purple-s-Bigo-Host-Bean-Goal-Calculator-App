@@ -1,7 +1,7 @@
 
 import React, { useState, createContext, useContext } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { UserProfile, Event, AdminUploadState } from './types';
+import { UserProfile, Event, AdminUploadState, UploadHistoryItem, SlotPreference } from './types';
 import Header from './components/Header';
 import SettingsPage from './pages/SettingsPage';
 import AdminUploadPage from './pages/AdminUploadPage';
@@ -14,29 +14,11 @@ const initialUser: UserProfile = {
   enableSms: true,
   currentBeanCount: 150000,
   monthlyBeanGoal: 500000,
-  preferredSlots: new Set(['October Bean Spree|10:00|60', 'Weekend Bonanza|14:00|45']),
+  preferredSlots: new Map<string, SlotPreference>(),
   timeFormat: 'standard',
 };
 
-const initialEvents: Event[] = [
-  {
-    name: 'October Bean Spree',
-    eventDates: '10/01 - 10/31',
-    slots: [
-      { id: 'obs-1', time: '10:00', duration: 60, estimatedPayout: 5000 },
-      { id: 'obs-2', time: '11:00', duration: 60, estimatedPayout: 5000 },
-      { id: 'obs-3', time: '13:00', duration: 60, estimatedPayout: 5000 },
-    ],
-  },
-  {
-    name: 'Weekend Bonanza',
-    eventDates: 'Every Weekend',
-    slots: [
-      { id: 'wb-1', time: '14:00', duration: 45, estimatedPayout: 7500 },
-      { id: 'wb-2', time: '16:00', duration: 45, estimatedPayout: 7500 },
-    ],
-  },
-];
+const initialEvents: Event[] = [];
 
 export const initialAdminUploadState: AdminUploadState = {
   file: null,
@@ -45,8 +27,6 @@ export const initialAdminUploadState: AdminUploadState = {
   error: null,
   ocrResult: null,
   processedEvent: null,
-  // FIX: Explicitly specify the generic type for new Set() to avoid it being inferred as Set<unknown>.
-  // This was the root cause for the error in AdminUploadPage.tsx on line 137.
   selectedOcrSlots: new Set<string>(),
 };
 
@@ -61,6 +41,8 @@ interface AppContextType {
   setIsAuthenticated: React.Dispatch<React.SetStateAction<boolean>>;
   adminUploadState: AdminUploadState;
   setAdminUploadState: React.Dispatch<React.SetStateAction<AdminUploadState>>;
+  uploadHistory: UploadHistoryItem[];
+  setUploadHistory: React.Dispatch<React.SetStateAction<UploadHistoryItem[]>>;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -83,6 +65,7 @@ const App: React.FC = () => {
   const [events, setEvents] = useState<Event[]>(initialEvents);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [adminUploadState, setAdminUploadState] = useState<AdminUploadState>(initialAdminUploadState);
+  const [uploadHistory, setUploadHistory] = useState<UploadHistoryItem[]>([]);
 
 
   const contextValue: AppContextType = {
@@ -94,6 +77,8 @@ const App: React.FC = () => {
     setIsAuthenticated,
     adminUploadState,
     setAdminUploadState,
+    uploadHistory,
+    setUploadHistory,
   };
 
   return (

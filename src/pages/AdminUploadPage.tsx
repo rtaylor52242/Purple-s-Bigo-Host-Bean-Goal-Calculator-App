@@ -1,11 +1,10 @@
 
 import React, { useState } from 'react';
 import { extractEventDetailsFromImage } from '../services/geminiService';
-import { Event, EventSlot } from '../types';
+import { Event, UploadHistoryItem, OcrResult } from '../types';
 import { useAppContext, initialAdminUploadState } from '../App';
 import { formatTime } from '../utils/time';
 import { parseEventDates } from '../utils/date';
-import { getRewardTier } from '../utils/rewards';
 
 const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -30,7 +29,7 @@ interface DateTimeSlot {
 }
 
 const AdminUploadPage: React.FC = () => {
-  const { setEvents, user, adminUploadState, setAdminUploadState } = useAppContext();
+  const { setEvents, user, adminUploadState, setAdminUploadState, uploadHistory, setUploadHistory } = useAppContext();
   const { file, preview, isLoading, error, ocrResult, processedEvent, selectedOcrSlots } = adminUploadState;
   
   const [dateTimeSlots, setDateTimeSlots] = useState<DateTimeSlot[]>([]);
@@ -65,6 +64,39 @@ const AdminUploadPage: React.FC = () => {
     setAdminUploadState(initialAdminUploadState);
     setDateTimeSlots([]);
   };
+
+  const handleHistoryClick = (item: UploadHistoryItem) => {
+    setAdminUploadState({
+        ...initialAdminUploadState,
+        preview: item.preview,
+        ocrResult: item.ocrResult,
+        processedEvent: item.ocrResult ? {
+            name: item.ocrResult.eventName,
+            eventDates: item.ocrResult.eventDates,
+            slots: item.ocrResult.slots,
+            rewardTiers: item.ocrResult.rewardTiers,
+        } : null,
+    });
+
+    if (item.ocrResult) {
+        const dates = parseEventDates(item.ocrResult.eventDates);
+        const generatedSlots: DateTimeSlot[] = [];
+        dates.forEach(date => {
+            item.ocrResult!.slots.forEach(slot => {
+            generatedSlots.push({
+                id: `${date.toISOString().split('T')[0]}T${slot.time}`,
+                date,
+                time: slot.time,
+                duration: slot.duration,
+            });
+            });
+        });
+        setDateTimeSlots(generatedSlots);
+        setAdminUploadState(prev => ({...prev, selectedOcrSlots: new Set(generatedSlots.map(s => s.id))}));
+    } else {
+        setDateTimeSlots([]);
+    }
+  }
   
   const handleOcrSlotToggle = (slotId: string) => {
     setAdminUploadState(prev => {
@@ -89,14 +121,7 @@ const AdminUploadPage: React.FC = () => {
       const base64Image = await fileToBase64(file);
       const result = await extractEventDetailsFromImage(base64Image);
       
-      const parsedSlots: EventSlot[] = result.slots.map((slot, index) => ({
-            id: `${result.eventName.replace(/\s+/g, '-')}-${index}`,
-            time: slot.time,
-            duration: slot.duration,
-            estimatedPayout: result.estimatedPayout,
-        }));
-        
-      if(parsedSlots.length === 0) {
+      if(result.slots.length === 0) {
         throw new Error("No valid time slots were detected in the image. Please try another image.");
       }
 
@@ -114,12 +139,30 @@ const AdminUploadPage: React.FC = () => {
       });
       setDateTimeSlots(generatedSlots);
 
+      const newProcessedEvent = {
+          name: result.eventName,
+          eventDates: result.eventDates,
+          rewardTiers: result.rewardTiers,
+          slots: result.slots,
+      };
+
       setAdminUploadState(prev => ({
         ...prev,
         ocrResult: result,
-        processedEvent: { name: result.eventName, eventDates: result.eventDates, slots: parsedSlots },
+        processedEvent: newProcessedEvent,
         selectedOcrSlots: new Set(generatedSlots.map(s => s.id)), // Pre-select all
       }));
+
+      // Add to history
+      const now = new Date();
+      const historyItem: UploadHistoryItem = {
+          id: now.toISOString(),
+          preview: `data:image/jpeg;base64,${base64Image}`,
+          date: now,
+          ocrResult: result,
+      };
+      setUploadHistory(prevHistory => [historyItem, ...prevHistory.slice(0, 9)]);
+
 
     } catch (err: any) {
       setAdminUploadState(prev => ({ ...prev, error: err.message || 'Failed to process image. Please try again.'}));
@@ -134,10 +177,7 @@ const AdminUploadPage: React.FC = () => {
       dateTimeSlots.forEach(s => { selectedSlotsById[s.id] = s; });
 
       const selectedDateSlots = Array.from(selectedOcrSlots)
-        .map(id => selectedSlotsById[id])
-        // FIX: The error on line 137 was caused by `selectedOcrSlots` being `Set<unknown>`. While that's fixed in `App.tsx`,
-        // this `.map` operation can produce `undefined` values. A type predicate is used here to correctly narrow the array
-        // type from `(DateTimeSlot | undefined)[]` to `DateTimeSlot[]`, preventing potential errors in the `.reduce` call below.
+        .map((id: string) => selectedSlotsById[id])
         .filter((slot): slot is DateTimeSlot => Boolean(slot));
 
       if (selectedDateSlots.length === 0) {
@@ -163,11 +203,11 @@ const AdminUploadPage: React.FC = () => {
         const eventToAdd: Event = {
           name: `${processedEvent.name} (${formattedDate})`,
           eventDates: formattedDate,
+          rewardTiers: processedEvent.rewardTiers,
           slots: slotsForDate.map((s, index) => ({
             id: `${processedEvent.name.replace(/\s+/g, '-')}-${dateKey}-${index}`,
             time: s.time,
             duration: s.duration,
-            estimatedPayout: processedEvent.slots[0]?.estimatedPayout || 0,
           })).sort((a, b) => a.time.localeCompare(b.time)),
         };
         eventsToAdd.push(eventToAdd);
@@ -196,7 +236,7 @@ const AdminUploadPage: React.FC = () => {
         }
         alert(alertMessage.trim());
 
-        return newEvents;
+        return newEvents.sort((a,b) => a.name.localeCompare(b.name));
       });
       
       removeImage();
@@ -283,10 +323,10 @@ const AdminUploadPage: React.FC = () => {
             )}
           </div>
           
-          {file && (
+          {preview && !processedEvent && (
               <button onClick={handleProcess} disabled={isLoading} className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold py-3 px-4 rounded-lg shadow-lg hover:from-purple-700 hover:to-indigo-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center">
                 {isLoading && <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>}
-                {isLoading ? 'Processing...' : (processedEvent ? 'Re-process Image' : 'Upload & Process')}
+                {isLoading ? 'Processing...' : 'Upload & Process'}
               </button>
           )}
 
@@ -294,20 +334,27 @@ const AdminUploadPage: React.FC = () => {
           
           {processedEvent && ocrResult && (
             <div className="border-t border-gray-700 pt-6 space-y-4">
-                 <div className="text-center">
+                 <div className="text-center bg-[#2a233a] p-4 rounded-lg">
                     <p className="text-gray-300">
                         Event detected: <span className="font-bold text-purple-400">{processedEvent.name}</span>
                     </p>
-                    <p className="text-gray-300">
-                        Est. payout of <span className="font-bold text-green-400">{processedEvent.slots[0].estimatedPayout.toLocaleString()} beans</span>
-                    </p>
+                     <div className="mt-2 text-sm text-gray-300">
+                        <span className="font-semibold text-gray-400">Reward Tiers:</span>
+                        <ul className="mt-1 space-y-1">
+                            {processedEvent.rewardTiers.map(tier => (
+                                <li key={tier.level} className="flex justify-center items-center gap-x-2">
+                                    <span className="font-bold text-green-400">{tier.beans.toLocaleString()} beans</span>
+                                    {tier.description && <span className="text-gray-400">- {tier.description}</span>}
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
                  </div>
 
                 <h3 className="text-lg font-medium text-white text-center pt-2">Select Available Time Slots</h3>
                 <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
-                    {dateTimeSlots.map(slot => {
+                    {dateTimeSlots.map((slot, index) => {
                         const formattedDate = `${slot.date.getUTCMonth() + 1}/${slot.date.getUTCDate()}/${slot.date.getUTCFullYear()}`;
-                        const rewardInfo = getRewardTier(processedEvent.slots[0]?.estimatedPayout || 0);
                         return (
                             <div key={slot.id} className="relative group">
                                 <label className="flex items-center justify-between p-3 bg-[#2a233a] rounded-md hover:bg-purple-900/50 cursor-pointer transition-colors">
@@ -317,16 +364,12 @@ const AdminUploadPage: React.FC = () => {
                                         checked={selectedOcrSlots.has(slot.id)}
                                         onChange={() => handleOcrSlotToggle(slot.id)}
                                         className="h-4 w-4 rounded bg-gray-700 border-gray-600 text-purple-600 focus:ring-purple-500" />
-                                    <span className="ml-3 text-gray-300 text-sm">{formattedDate} - at - {formatTime(slot.time, user.timeFormat)} PST - for - {slot.duration} minutes</span>
+                                    <span className="ml-3 text-gray-300 text-sm">
+                                        <span className="inline-block w-6 text-right mr-2 text-gray-400">{index + 1}.</span>
+                                        {formattedDate} - at - {formatTime(slot.time, user.timeFormat)} PST - for - {slot.duration} minutes
+                                    </span>
                                 </div>
                                 </label>
-                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs p-3 bg-[#10101a] border border-gray-700 text-white text-sm rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                                    <h4 className="font-bold text-purple-400">{rewardInfo.tier}</h4>
-                                    <p className="text-xs text-gray-300 mb-2">{rewardInfo.description}</p>
-                                    <ul className="list-disc list-inside text-xs space-y-1">
-                                        {rewardInfo.rewards.map((reward, i) => <li key={i}>{reward}</li>)}
-                                    </ul>
-                                </div>
                             </div>
                         )
                     })}
@@ -337,6 +380,22 @@ const AdminUploadPage: React.FC = () => {
             </div>
           )}
         </div>
+
+        {uploadHistory.length > 0 && (
+             <div className="mt-8">
+                <h2 className="text-xl font-bold text-white text-center mb-4">Upload History</h2>
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4">
+                    {uploadHistory.map(item => (
+                        <div key={item.id} className="relative group cursor-pointer" onClick={() => handleHistoryClick(item)}>
+                            <img src={item.preview} alt={`Upload from ${item.date.toLocaleString()}`} className="rounded-md aspect-square object-cover w-full h-full"/>
+                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-center p-2">
+                                <p className="text-xs text-white">{item.ocrResult?.eventName || "Event Details"}<br/>{item.date.toLocaleDateString()}</p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        )}
       </div>
       
       {isModalOpen && preview && (

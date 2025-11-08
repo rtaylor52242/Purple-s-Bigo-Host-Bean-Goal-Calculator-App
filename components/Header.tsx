@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAppContext } from '../App';
@@ -23,8 +22,8 @@ const Header: React.FC = () => {
                 <span className="text-purple-400">Purple</span>App
               </span>
             </div>
-            <div className="hidden md:block">
-              <div className="ml-10 flex items-baseline space-x-4">
+            <div>
+              <div className="ml-4 md:ml-10 flex items-baseline space-x-2 md:space-x-4">
                 <NavLink to="/settings" className={navLinkClass}>
                   Settings
                 </NavLink>
@@ -34,10 +33,10 @@ const Header: React.FC = () => {
               </div>
             </div>
           </div>
-          <div className="hidden md:block">
+          <div>
             <button
               onClick={() => setIsAuthenticated(false)}
-              className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-white"
+              className="px-3 md:px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-white"
             >
               Sign Out
             </button>

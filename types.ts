@@ -1,25 +1,44 @@
 
+export interface RewardTier {
+  level: number;
+  beans: number;
+  description?: string;
+}
+
+export interface SlotPreference {
+  isSelected: boolean;
+  rewardTierIndex: number;
+}
+
+export interface UploadHistoryItem {
+  id: string; // Using ISO string of the date for a unique ID
+  preview: string;
+  date: Date;
+  ocrResult: OcrResult | null;
+}
+
 export interface UserProfile {
   bigoUserId: string;
   phoneNumber: string;
   enableSms: boolean;
   currentBeanCount: number;
   monthlyBeanGoal: number;
-  preferredSlots: Set<string>;
+  preferredSlots: Map<string, SlotPreference>;
   timeFormat: 'military' | 'standard';
+  availableStreamDays?: number;
 }
 
 export interface EventSlot {
   id: string;
   time: string;
   duration: number;
-  estimatedPayout: number;
 }
 
 export interface Event {
   name: string;
   eventDates: string;
   slots: EventSlot[];
+  rewardTiers: RewardTier[];
 }
 
 export interface DetectedSlot {
@@ -30,7 +49,7 @@ export interface DetectedSlot {
 export interface OcrResult {
   eventName: string;
   eventDates: string;
-  estimatedPayout: number;
+  rewardTiers: RewardTier[];
   slots: DetectedSlot[];
 }
 
@@ -40,6 +59,6 @@ export interface AdminUploadState {
   isLoading: boolean;
   error: string | null;
   ocrResult: OcrResult | null;
-  processedEvent: Event | null;
+  processedEvent: Omit<Event, 'slots'> & { slots: Omit<EventSlot, 'id'|'estimatedPayout'>[] } | null;
   selectedOcrSlots: Set<string>;
 }
