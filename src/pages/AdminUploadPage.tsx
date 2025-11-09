@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import { extractEventDetailsFromImage } from '../services/geminiService';
 import { Event, UploadHistoryItem, OcrResult } from '../types';
@@ -21,6 +22,13 @@ const UploadIcon = () => (
     </svg>
 );
 
+const ZoomIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m-3-3h6" />
+    </svg>
+);
+
+
 interface DateTimeSlot {
   id: string; // e.g., '2025-11-08T16:00'
   date: Date;
@@ -34,11 +42,17 @@ const AdminUploadPage: React.FC = () => {
   
   const [dateTimeSlots, setDateTimeSlots] = useState<DateTimeSlot[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [imageForModal, setImageForModal] = useState<string | null>(null);
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [startDrag, setStartDrag] = useState({ x: 0, y: 0 });
+  const [isHistoryExpanded, setIsHistoryExpanded] = useState(true);
   
+  const handleDeleteHistoryItem = (id: string) => {
+    setUploadHistory(prev => prev.filter(item => item.id !== id));
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0];
@@ -244,10 +258,14 @@ const AdminUploadPage: React.FC = () => {
   };
 
   // --- Modal and Zoom handlers ---
-  const openModal = () => setIsModalOpen(true);
+  const openModal = (imageUrl: string) => {
+    setImageForModal(imageUrl);
+    setIsModalOpen(true);
+  };
   
   const closeModal = () => {
     setIsModalOpen(false);
+    setImageForModal(null);
     handleResetZoom();
   };
 
@@ -289,17 +307,17 @@ const AdminUploadPage: React.FC = () => {
   return (
     <div className="flex flex-col items-center">
       <div className="w-full max-w-2xl">
-        <h1 className="text-3xl font-bold text-white text-center mb-8">Admin Event Upload</h1>
-        <div className="bg-[#1a1625] p-8 rounded-lg shadow-md border border-gray-700 space-y-6">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white text-center mb-8">Admin Event Upload</h1>
+        <div className="bg-white dark:bg-[#1a1625] p-8 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 space-y-6">
           
           <div>
-            <label className="block text-sm font-medium text-gray-400 mb-2">Event Screenshot</label>
+            <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Event Screenshot</label>
             {!preview ? (
-              <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-600 border-dashed rounded-md">
+              <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 dark:border-gray-600 border-dashed rounded-md">
                 <div className="space-y-1 text-center">
                   <UploadIcon/>
-                  <div className="flex text-sm text-gray-400">
-                    <label htmlFor="file-upload" className="relative cursor-pointer bg-[#2a233a] rounded-md font-medium text-purple-400 hover:text-purple-300 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-offset-gray-900 focus-within:ring-purple-500 px-1">
+                  <div className="flex text-sm text-gray-600 dark:text-gray-400">
+                    <label htmlFor="file-upload" className="relative cursor-pointer bg-gray-100 dark:bg-[#2a233a] rounded-md font-medium text-purple-600 dark:text-purple-400 hover:text-purple-500 dark:hover:text-purple-300 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-offset-gray-100 dark:focus-within:ring-offset-gray-900 focus-within:ring-purple-500 px-1">
                       <span>Upload a file</span>
                       <input id="file-upload" name="file-upload" type="file" className="sr-only" onChange={handleFileChange} accept="image/png, image/jpeg" />
                     </label>
@@ -314,7 +332,7 @@ const AdminUploadPage: React.FC = () => {
                     src={preview} 
                     alt="Event preview" 
                     className="w-auto max-h-60 mx-auto rounded-md cursor-pointer hover:opacity-80 transition-opacity"
-                    onClick={openModal}
+                    onClick={() => preview && openModal(preview)}
                 />
                 <button onClick={removeImage} className="absolute top-2 right-2 bg-red-600/80 text-white rounded-full p-1 text-xs hover:bg-red-700">
                   Remove
@@ -330,42 +348,52 @@ const AdminUploadPage: React.FC = () => {
               </button>
           )}
 
-          {error && <p className="text-red-400 text-sm text-center">{error}</p>}
+          {error && <p className="text-red-500 dark:text-red-400 text-sm text-center">{error}</p>}
           
           {processedEvent && ocrResult && (
-            <div className="border-t border-gray-700 pt-6 space-y-4">
-                 <div className="text-center bg-[#2a233a] p-4 rounded-lg">
-                    <p className="text-gray-300">
-                        Event detected: <span className="font-bold text-purple-400">{processedEvent.name}</span>
-                    </p>
-                     <div className="mt-2 text-sm text-gray-300">
-                        <span className="font-semibold text-gray-400">Reward Tiers:</span>
+            <div className="border-t border-gray-200 dark:border-gray-700 pt-6 space-y-4">
+                 <div className="bg-gray-100 dark:bg-[#2a233a] p-4 rounded-lg">
+                    <div className="text-center">
+                        <p className="text-gray-700 dark:text-gray-300">
+                            Event detected: <span className="font-bold text-purple-600 dark:text-purple-400">{processedEvent.name}</span>
+                        </p>
+                        {ocrResult.rebatePercent && (
+                            <div className="mt-3 pt-3 border-t border-gray-300 dark:border-gray-600">
+                                <p className="text-gray-700 dark:text-gray-300">
+                                Rebate: <span className="font-bold text-yellow-500 dark:text-yellow-400">{ocrResult.rebatePercent}%</span>
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                     <div className="mt-4 text-sm text-gray-700 dark:text-gray-300">
+                        <span className="font-semibold text-gray-500 dark:text-gray-400">Reward Tiers:</span>
                         <ul className="mt-1 space-y-1">
-                            {processedEvent.rewardTiers.map(tier => (
-                                <li key={tier.level} className="flex justify-center items-center gap-x-2">
-                                    <span className="font-bold text-green-400">{tier.beans.toLocaleString()} beans</span>
-                                    {tier.description && <span className="text-gray-400">- {tier.description}</span>}
+                            {processedEvent.rewardTiers.map((tier, index) => (
+                                <li key={tier.level} className="flex items-center gap-x-2">
+                                    <span className="text-gray-500 dark:text-gray-400 w-6 text-right">{index + 1}.</span>
+                                    <span className="font-bold text-green-600 dark:text-green-400">{tier.beans.toLocaleString()} beans</span>
+                                    {tier.description && <span className="text-gray-500 dark:text-gray-400">- {tier.description}</span>}
                                 </li>
                             ))}
                         </ul>
                     </div>
                  </div>
 
-                <h3 className="text-lg font-medium text-white text-center pt-2">Select Available Time Slots</h3>
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white text-center pt-2">Select Available Time Slots</h3>
                 <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
                     {dateTimeSlots.map((slot, index) => {
                         const formattedDate = `${slot.date.getUTCMonth() + 1}/${slot.date.getUTCDate()}/${slot.date.getUTCFullYear()}`;
                         return (
                             <div key={slot.id} className="relative group">
-                                <label className="flex items-center justify-between p-3 bg-[#2a233a] rounded-md hover:bg-purple-900/50 cursor-pointer transition-colors">
+                                <label className="flex items-center justify-between p-3 bg-gray-100 dark:bg-[#2a233a] rounded-md hover:bg-purple-50 dark:hover:bg-purple-900/50 cursor-pointer transition-colors">
                                 <div className="flex items-center">
                                     <input 
                                         type="checkbox"
                                         checked={selectedOcrSlots.has(slot.id)}
                                         onChange={() => handleOcrSlotToggle(slot.id)}
-                                        className="h-4 w-4 rounded bg-gray-700 border-gray-600 text-purple-600 focus:ring-purple-500" />
-                                    <span className="ml-3 text-gray-300 text-sm">
-                                        <span className="inline-block w-6 text-right mr-2 text-gray-400">{index + 1}.</span>
+                                        className="h-4 w-4 rounded bg-gray-200 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-purple-600 focus:ring-purple-500" />
+                                    <span className="ml-3 text-gray-700 dark:text-gray-300 text-sm">
+                                        <span className="inline-block w-6 text-right mr-2 text-gray-500 dark:text-gray-400">{index + 1}.</span>
                                         {formattedDate} - at - {formatTime(slot.time, user.timeFormat)} PST - for - {slot.duration} minutes
                                     </span>
                                 </div>
@@ -382,15 +410,61 @@ const AdminUploadPage: React.FC = () => {
         </div>
 
         {uploadHistory.length > 0 && (
-             <div className="mt-8">
-                <h2 className="text-xl font-bold text-white text-center mb-4">Upload History</h2>
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4">
+            <div className="mt-8">
+                <div className="flex justify-center items-center mb-4">
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white text-center">Upload History</h2>
+                    <button
+                        onClick={() => setIsHistoryExpanded(!isHistoryExpanded)}
+                        className="ml-4 p-1 rounded-full hover:bg-black/10 dark:hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        aria-expanded={isHistoryExpanded}
+                        aria-controls="upload-history-grid-src"
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className={`h-6 w-6 text-gray-500 dark:text-gray-400 transition-transform duration-300 ${isHistoryExpanded ? 'rotate-180' : ''}`}
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                        >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </button>
+                </div>
+                <div 
+                    id="upload-history-grid-src"
+                    className={`grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4 overflow-hidden transition-all ease-in-out duration-500 ${isHistoryExpanded ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}`}
+                >
                     {uploadHistory.map(item => (
                         <div key={item.id} className="relative group cursor-pointer" onClick={() => handleHistoryClick(item)}>
                             <img src={item.preview} alt={`Upload from ${item.date.toLocaleString()}`} className="rounded-md aspect-square object-cover w-full h-full"/>
                             <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-center p-2">
-                                <p className="text-xs text-white">{item.ocrResult?.eventName || "Event Details"}<br/>{item.date.toLocaleDateString()}</p>
+                                <p className="text-xs text-white">
+                                    Imported:<br/>
+                                    {item.date.toLocaleDateString(undefined, { dateStyle: 'short' })}
+                                    <br/>
+                                    {item.date.toLocaleTimeString(undefined, { timeStyle: 'short' })}
+                                </p>
                             </div>
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    openModal(item.preview);
+                                }}
+                                className="absolute top-2 right-2 bg-black/50 p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70 focus:outline-none"
+                                aria-label="Zoom image"
+                            >
+                                <ZoomIcon />
+                            </button>
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteHistoryItem(item.id);
+                                }}
+                                className="absolute top-2 left-2 bg-red-600 text-white rounded-full p-1 h-5 w-5 flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-red-700 transition-opacity z-10"
+                                aria-label="Delete history item"
+                            >
+                                &times;
+                            </button>
                         </div>
                     ))}
                 </div>
@@ -398,7 +472,7 @@ const AdminUploadPage: React.FC = () => {
         )}
       </div>
       
-      {isModalOpen && preview && (
+      {isModalOpen && imageForModal && (
         <div 
             className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4"
             onClick={closeModal}
@@ -416,7 +490,7 @@ const AdminUploadPage: React.FC = () => {
           >
             <div className="w-full h-full overflow-hidden">
                 <img 
-                    src={preview} 
+                    src={imageForModal} 
                     alt="Event preview enlarged" 
                     className="absolute top-0 left-0 transition-transform duration-100"
                     style={{

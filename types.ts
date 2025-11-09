@@ -1,8 +1,19 @@
+// FIX: Import Dispatch and SetStateAction from React to use in AppContextType.
+import type { Dispatch, SetStateAction } from 'react';
 
 export interface RewardTier {
   level: number;
   beans: number;
   description?: string;
+}
+
+export interface RegionalTier {
+  rank: string;
+  goal: number;
+  hoursRequired: number;
+  payout: number;
+  agencySupport: number;
+  walletProfit: number;
 }
 
 export interface SlotPreference {
@@ -26,6 +37,10 @@ export interface UserProfile {
   preferredSlots: Map<string, SlotPreference>;
   timeFormat: 'military' | 'standard';
   availableStreamDays?: number;
+  timeZone: string;
+  maxPathways?: number;
+  currentHours?: number;
+  currentForeignBeanCount?: number;
 }
 
 export interface EventSlot {
@@ -49,6 +64,7 @@ export interface DetectedSlot {
 export interface OcrResult {
   eventName: string;
   eventDates: string;
+  rebatePercent?: number;
   rewardTiers: RewardTier[];
   slots: DetectedSlot[];
 }
@@ -61,4 +77,21 @@ export interface AdminUploadState {
   ocrResult: OcrResult | null;
   processedEvent: Omit<Event, 'slots'> & { slots: Omit<EventSlot, 'id'|'estimatedPayout'>[] } | null;
   selectedOcrSlots: Set<string>;
+}
+
+export interface AppContextType {
+  user: UserProfile;
+  setUser: Dispatch<SetStateAction<UserProfile>>;
+  events: Event[];
+  setEvents: Dispatch<SetStateAction<Event[]>>;
+  isAuthenticated: boolean;
+  setIsAuthenticated: Dispatch<SetStateAction<boolean>>;
+  adminUploadState: AdminUploadState;
+  setAdminUploadState: Dispatch<SetStateAction<AdminUploadState>>;
+  uploadHistory: UploadHistoryItem[];
+  setUploadHistory: Dispatch<SetStateAction<UploadHistoryItem[]>>;
+  regionalTiers: RegionalTier[] | null;
+  setRegionalTiers: Dispatch<SetStateAction<RegionalTier[] | null>>;
+  theme: 'light' | 'dark';
+  setTheme: Dispatch<SetStateAction<'light' | 'dark'>>;
 }

@@ -1,6 +1,7 @@
 
+
 import { GoogleGenAI, Type } from "@google/genai";
-import { OcrResult } from "../types";
+import { OcrResult, RegionalTier } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
@@ -17,7 +18,7 @@ export async function extractEventDetailsFromImage(base64Image: string): Promise
             },
           },
           {
-            text: "Analyze this event screenshot. Extract: 1. The main event title. 2. The event run dates as a string (e.g., '11/08-11/11'). 3. A list of all reward tiers, including the level number and the beans rewarded. 4. All available time slots. If a time range is given (e.g., '4 PM - 6 PM'), create slots for every 30 minutes within that range. 5. The required participation duration in minutes. This duration should apply to all slots. Format time in HH:MM. Provide the response as JSON.",
+            text: "Analyze this event screenshot. Extract: 1. The main event title. 2. The event run dates as a string (e.g., '11/08-11/11'). 3. A list of all reward tiers, including the level number and the beans rewarded. 4. All available time slots. If a time range is given (e.g., '4 PM - 6 PM'), create slots for every 30 minutes within that range. 5. The required participation duration in minutes. This duration should apply to all slots. 6. The rebate percentage if specified. Format time in HH:MM. Provide the response as JSON.",
           },
         ],
       },
@@ -33,6 +34,10 @@ export async function extractEventDetailsFromImage(base64Image: string): Promise
             eventDates: {
               type: Type.STRING,
               description: "The dates or date range of the event, e.g., '11/08-11/11; 11/15-11/18'."
+            },
+            rebatePercent: {
+                type: Type.NUMBER,
+                description: "The rebate percentage offered for the event, if any."
             },
             rewardTiers: {
               type: Type.ARRAY,
@@ -98,5 +103,77 @@ export async function extractEventDetailsFromImage(base64Image: string): Promise
   } catch (error) {
     console.error("Error calling Gemini API:", error);
     throw new Error("Failed to extract event details from the image.");
+  }
+}
+
+export async function extractRegionalTiersFromImage(base64Image: string): Promise<RegionalTier[]> {
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: {
+        parts: [
+          {
+            inlineData: {
+              mimeType: "image/jpeg",
+              data: base64Image,
+            },
+          },
+          {
+            text: "Analyze this regional tier chart screenshot. The chart has columns: 'Rank', 'Bean Goal', 'Hours Required', 'Tier Payout', '40% MAX In Agency Support', and 'Instant Wallet Profit'. Extract all rows. Provide the response as a JSON array of objects. Each object should have keys: 'rank' (string), 'goal' (number), 'hoursRequired' (number), 'payout' (number), 'agencySupport' (number), and 'walletProfit' (number). Ignore currency symbols and commas when parsing numbers.",
+          },
+        ],
+      },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+            type: Type.ARRAY,
+            description: "A list of regional goal tiers and their corresponding data.",
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                rank: {
+                  type: Type.STRING,
+                  description: "The rank for the tier, e.g., 'S20'."
+                },
+                goal: {
+                  type: Type.NUMBER,
+                  description: "The bean goal for the tier, from the 'Bean Goal' column."
+                },
+                hoursRequired: {
+                  type: Type.NUMBER,
+                  description: "The hours required for the tier."
+                },
+                payout: {
+                  type: Type.NUMBER,
+                  description: "The cash payout from the 'Tier Payout' column."
+                },
+                agencySupport: {
+                  type: Type.NUMBER,
+                  description: "The value from the '40% MAX In Agency Support' column."
+                },
+                walletProfit: {
+                  type: Type.NUMBER,
+                  description: "The value from the 'Instant Wallet Profit' column."
+                }
+              },
+              required: ["rank", "goal", "hoursRequired", "payout", "agencySupport", "walletProfit"]
+            }
+        },
+      },
+    });
+
+    const jsonString = response.text.trim();
+    const parsedResult = JSON.parse(jsonString);
+
+    if (Array.isArray(parsedResult)) {
+        // Sort tiers by goal descending to match image
+        parsedResult.sort((a: any, b: any) => b.goal - a.goal);
+        return parsedResult as RegionalTier[];
+    } else {
+        throw new Error("Invalid data format received from Gemini API.");
+    }
+  } catch (error) {
+    console.error("Error calling Gemini API for tier chart:", error);
+    throw new Error("Failed to extract tier details from the image.");
   }
 }
