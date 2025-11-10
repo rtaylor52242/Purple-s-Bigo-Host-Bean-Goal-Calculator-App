@@ -2,21 +2,24 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '../App';
 import { UserProfile, Event, EventSlot, SlotPreference } from '../types';
 import { formatTime } from '../utils/time';
+import { formatSelectedDatesForDisplay } from '../utils/date';
 
 const SettingsPage: React.FC = () => {
   const { user, setUser, events, regionalTiers } = useAppContext();
   const [maxPathwaysError, setMaxPathwaysError] = useState('');
-  const [isBigoIdLocked, setIsBigoIdLocked] = useState(true); // Re-added
-  const [saveMessage, setSaveMessage] = useState<string | null>(null); // Re-added
+  const [isBigoIdLocked, setIsBigoIdLocked] = useState(true);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [selectedSort, setSelectedSort] = useState<{ key: 'name' | 'time' | 'duration', direction: 'asc' | 'desc' }>({ key: 'name', direction: 'asc' });
+  const [availableSort, setAvailableSort] = useState<{ key: 'name' | 'time' | 'duration', direction: 'asc' | 'desc' }>({ key: 'time', direction: 'asc' });
+  const [isDatesModalOpen, setIsDatesModalOpen] = useState(false);
+
 
   useEffect(() => {
-    // FIX: Corrected typo from `regionalTers` to `regionalTiers`.
     if (regionalTiers && regionalTiers.length > 0) {
       const availableGoals = regionalTiers.map(t => t.goal);
       if (!availableGoals.includes(user.monthlyBeanGoal)) {
         setUser(prev => ({
           ...prev,
-          // Set to the first goal in the list which is the highest
           monthlyBeanGoal: availableGoals[0],
         }));
       }
@@ -25,7 +28,6 @@ const SettingsPage: React.FC = () => {
 
   const timeZoneOptions = useMemo(() => {
     try {
-        // FIX: Cast Intl to any to use 'supportedValuesOf' which might not be in the default TS lib.
         return (Intl as any).supportedValuesOf('timeZone').map((timeZone: string) => {
             const offset = new Intl.DateTimeFormat('en-US', { timeZoneName: 'shortOffset', timeZone }).formatToParts(new Date()).find(part => part.type === 'timeZoneName')?.value ?? '';
             const displayOffset = offset.replace('GMT', 'UTC');
@@ -37,7 +39,6 @@ const SettingsPage: React.FC = () => {
             return a.label.localeCompare(b.label);
         });
     } catch (e) {
-        // Fallback for older browsers
         return [
             { value: 'UTC', label: '(UTC+00:00) Coordinated Universal Time' },
             { value: 'Europe/London', label: '(UTC+01:00) London, Dublin' },
@@ -75,14 +76,12 @@ const SettingsPage: React.FC = () => {
   }, [events, user.preferredSlots]);
 
   const totalAvailableSlots = useMemo(() => {
-    // FIX: Explicitly type the accumulator `count` to `number` to resolve a type inference issue.
     return Array.from(availableSlotsByEvent.values()).reduce((count: number, eventData: { slots: EventSlot[] }) => count + eventData.slots.length, 0);
   }, [availableSlotsByEvent]);
 
   const remainingDaysInMonth = useMemo(() => {
     const today = new Date();
     const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-    // Include the current day in the count
     return lastDayOfMonth.getDate() - today.getDate() + 1; 
   }, []);
 
@@ -94,6 +93,19 @@ const SettingsPage: React.FC = () => {
       setMaxPathwaysError('');
     }
   }, [user.maxPathways]);
+  
+  const handleSortChange = (
+    list: 'selected' | 'available',
+    newKey: 'name' | 'time' | 'duration'
+  ) => {
+    const setSort = list === 'selected' ? setSelectedSort : setAvailableSort;
+    setSort(prevSort => {
+      if (prevSort.key === newKey) {
+        return { ...prevSort, direction: prevSort.direction === 'asc' ? 'desc' : 'asc' };
+      }
+      return { key: newKey, direction: 'asc' };
+    });
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -111,11 +123,10 @@ const SettingsPage: React.FC = () => {
         }
     } else if (['currentBeanCount', 'monthlyBeanGoal', 'currentHours', 'currentForeignBeanCount'].includes(name)) {
         const num = parseInt(value.replace(/,/g, ''), 10);
-        newValue = isNaN(num) ? 0 : num; // Ensure it's a number, default to 0
+        newValue = isNaN(num) ? 0 : num;
     } else if (type === 'number') {
         const num = parseInt(value, 10);
         if (name === 'maxPathways') {
-            // Allow empty string to mean undefined, otherwise cap between 0 and 20
             newValue = value === '' ? undefined : Math.max(0, Math.min(num, 20)); 
         } else {
             newValue = num || 0;
@@ -209,22 +220,27 @@ const SettingsPage: React.FC = () => {
   };
 
   const handleSaveSettings = () => {
-    // Rely on App.tsx's useEffect to auto-save any changes to the user object.
-    // This button primarily provides visual feedback to the user.
     setSaveMessage("Settings saved!");
     setTimeout(() => {
       setSaveMessage(null);
-    }, 3000); // Message disappears after 3 seconds
+    }, 3000);
   };
 
   const goalProgress = useMemo(() => {
     const { monthlyBeanGoal, currentBeanCount } = user;
-    if (monthlyBeanGoal <= 0) return { dailyBeansNeeded: 0, remainingGoal: 0, remainingDays: 0, statusMessage: 'Set a monthly goal to see your progress.' };
+    
+    if (!regionalTiers || regionalTiers.length === 0) {
+      return { dailyBeansNeeded: 0, remainingGoal: 0, remainingDays: 0, statusMessage: 'Regional tiers not loaded.', hoursLeftToGoal: 0 };
+    }
+
+    if (monthlyBeanGoal <= 0) {
+      return { dailyBeansNeeded: 0, remainingGoal: 0, remainingDays: 0, statusMessage: 'Set a monthly goal to see your progress.', hoursLeftToGoal: 0 };
+    }
 
     const remainingGoal = Math.max(0, monthlyBeanGoal - currentBeanCount);
     
-    const remainingDaysForCalc = Math.max(1, remainingDaysInMonth); // Use remainingDaysInMonth
-    const remainingDaysForDisplay = remainingDaysInMonth; // Fix: Directly use the calculated remainingDaysInMonth for display
+    const remainingDaysForCalc = Math.max(1, remainingDaysInMonth);
+    const remainingDaysForDisplay = remainingDaysInMonth;
 
     const daysToStream = remainingDaysForCalc;
 
@@ -234,12 +250,82 @@ const SettingsPage: React.FC = () => {
       ? `Goal Check: Need ${dailyBeansNeeded.toLocaleString()} beans per day!`
       : `Goal reached! You are ${(currentBeanCount - monthlyBeanGoal).toLocaleString()} beans over.`;
       
-    return { dailyBeansNeeded, remainingGoal, remainingDays: remainingDaysForDisplay, statusMessage };
-  }, [user, remainingDaysInMonth]);
+    const selectedMonthlyGoalTier = regionalTiers.find(tier => tier.goal === user.monthlyBeanGoal);
+    
+    const hoursRequiredForGoal = selectedMonthlyGoalTier?.hoursRequired ?? 0;
+    const hoursLeftToGoal = Math.max(0, hoursRequiredForGoal - (user.currentHours ?? 0));
 
-  const selectedSlots = Array.from(user.preferredSlots.entries())
-    .filter(([_, pref]) => pref.isSelected)
-    .sort(([keyA], [keyB]) => keyA.localeCompare(keyB));
+    return { dailyBeansNeeded, remainingGoal, remainingDays: remainingDaysForDisplay, statusMessage, hoursLeftToGoal };
+  }, [user, remainingDaysInMonth, regionalTiers]);
+
+  const sortedSelectedSlots = useMemo(() => {
+    const slots = Array.from(user.preferredSlots.entries())
+      .filter(([_, pref]) => pref.isSelected)
+      .map(([identifier, pref]) => ({
+        identifier,
+        pref,
+        details: slotDetailsMap.get(identifier),
+      }));
+
+    slots.sort((a, b) => {
+      if (!a.details || !b.details) return 0;
+      const { event: eventA, slot: slotA } = a.details;
+      const { event: eventB, slot: slotB } = b.details;
+
+      let compareResult = 0;
+      switch (selectedSort.key) {
+        case 'time':
+          compareResult = slotA.time.localeCompare(slotB.time);
+          if (compareResult === 0) compareResult = eventA.name.localeCompare(eventB.name);
+          break;
+        case 'duration':
+          compareResult = slotA.duration - slotB.duration;
+          if (compareResult === 0) compareResult = eventA.name.localeCompare(eventB.name);
+          break;
+        case 'name':
+        default:
+          compareResult = eventA.name.localeCompare(eventB.name);
+          if (compareResult === 0) compareResult = slotA.time.localeCompare(slotB.time);
+          break;
+      }
+      return selectedSort.direction === 'asc' ? compareResult : -compareResult;
+    });
+
+    return slots;
+  }, [user.preferredSlots, selectedSort, slotDetailsMap]);
+
+  const sortedAvailableSlots = useMemo(() => {
+    const allSlots = Array.from(availableSlotsByEvent.values()).flatMap(({ event, slots }) =>
+      slots.map(slot => ({ event, slot }))
+    );
+
+    allSlots.sort((a, b) => {
+      const { event: eventA, slot: slotA } = a;
+      const { event: eventB, slot: slotB } = b;
+
+      let compareResult = 0;
+      switch (availableSort.key) {
+        case 'time':
+          compareResult = slotA.time.localeCompare(slotB.time);
+          if (compareResult === 0) compareResult = eventA.name.localeCompare(eventB.name);
+          break;
+        case 'duration':
+          compareResult = slotA.duration - slotB.duration;
+          if (compareResult === 0) compareResult = eventA.name.localeCompare(eventB.name);
+          break;
+        case 'name':
+        default:
+          compareResult = eventA.name.localeCompare(eventB.name);
+          if (compareResult === 0) compareResult = slotA.time.localeCompare(slotB.time);
+          break;
+      }
+      return availableSort.direction === 'asc' ? compareResult : -compareResult;
+    });
+
+    return allSlots;
+  }, [availableSlotsByEvent, availableSort]);
+  
+  const formattedPreferredDates = useMemo(() => formatSelectedDatesForDisplay(user.preferredDates || new Set()), [user.preferredDates]);
     
   const BigoUserIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
@@ -265,6 +351,17 @@ const SettingsPage: React.FC = () => {
     </svg>
   );
 
+  const CalendarIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+    </svg>
+  );
+
+  const SortIcon = ({ direction }: { direction: 'asc' | 'desc' }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 inline-block ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+      {direction === 'asc' ? <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" /> : <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />}
+    </svg>
+  );
 
   return (
     <div className="space-y-8">
@@ -274,7 +371,16 @@ const SettingsPage: React.FC = () => {
         <div className="lg:col-span-2 space-y-8">
           {/* Profile Card */}
           <div className="bg-white dark:bg-[#1a1625] p-6 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Profile</h2>
+            <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Profile</h2>
+                <button 
+                onClick={() => setIsDatesModalOpen(true)}
+                className="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none"
+                aria-label="Show preferred dates reminder"
+                >
+                <CalendarIcon />
+                </button>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Bigo ID</label>
@@ -332,15 +438,22 @@ const SettingsPage: React.FC = () => {
           <div className="bg-white dark:bg-[#1a1625] p-6 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
             <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Event Preferences</h2>
             
-            {selectedSlots.length > 0 && (
+            {sortedSelectedSlots.length > 0 && (
               <div className="mb-6">
                 <div className="flex justify-between items-center mb-3 border-b border-gray-200 dark:border-gray-700 pb-2">
-                  <h3 className="text-lg font-medium text-purple-600 dark:text-purple-400">Your Selections</h3>
-                  <span className="text-sm font-medium text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/50 px-2.5 py-1 rounded-full">{selectedSlots.length} selected</span>
+                    <h3 className="text-lg font-medium text-purple-600 dark:text-purple-400">Your Selections ({sortedSelectedSlots.length})</h3>
+                    <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+                        <span>Sort by:</span>
+                        {(['name', 'time', 'duration'] as const).map(key => (
+                        <button key={key} onClick={() => handleSortChange('selected', key)} className={`px-2 py-1 rounded capitalize ${selectedSort.key === key ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}>
+                            {key}
+                            {selectedSort.key === key && <SortIcon direction={selectedSort.direction} />}
+                        </button>
+                        ))}
+                    </div>
                 </div>
                 <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
-                    {selectedSlots.map(([identifier, pref]) => {
-                        const details = slotDetailsMap.get(identifier);
+                    {sortedSelectedSlots.map(({ identifier, pref, details }) => {
                         if (!details) return null;
                         const { event, slot } = details;
                         const selectedTier = pref.rewardTierIndex < event.rewardTiers.length ? event.rewardTiers[pref.rewardTierIndex] : null;
@@ -373,71 +486,62 @@ const SettingsPage: React.FC = () => {
               <button onClick={handleSelectAll} className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700 transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500">
                 Select All Slots
               </button>
-              <button onClick={handleClearAll} className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500" disabled={selectedSlots.length === 0}>
+              <button onClick={handleClearAll} className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500" disabled={sortedSelectedSlots.length === 0}>
                 Remove All Slots
               </button>
             </div>
 
             <div className="flex justify-between items-center mt-6 mb-2">
-              <h3 className="text-lg font-medium text-purple-600 dark:text-purple-400">All Available Slots</h3>
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-700/50 px-2.5 py-1 rounded-full">{totalAvailableSlots} available</span>
+                <h3 className="text-lg font-medium text-purple-600 dark:text-purple-400">All Available Slots ({sortedAvailableSlots.length})</h3>
+                <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+                    <span>Sort by:</span>
+                    {(['time', 'name', 'duration'] as const).map(key => (
+                    <button key={key} onClick={() => handleSortChange('available', key)} className={`px-2 py-1 rounded capitalize ${availableSort.key === key ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}>
+                        {key}
+                        {availableSort.key === key && <SortIcon direction={availableSort.direction} />}
+                    </button>
+                    ))}
+                </div>
             </div>
-            <div className="space-y-6 max-h-96 overflow-y-auto pr-2 pb-40">
-              {availableSlotsByEvent.size > 0 ? (
-                (() => {
-                  let slotCounter = 0;
-                  return Array.from(availableSlotsByEvent.values()).map(({ event, slots }) => (
-                    <div key={event.name}>
-                      <h4 className="text-md font-medium text-purple-600 dark:text-purple-400 mb-2">{event.name}</h4>
-                      <div className="space-y-2">
-                        {slots.map(slot => {
-                            slotCounter++;
-                            const slotIdentifier = `${event.name}|${slot.time}|${slot.duration}`;
-                            const tiers = event.rewardTiers;
-                            const preference = user.preferredSlots.get(slotIdentifier);
-                            const isSelected = preference?.isSelected ?? false;
-                            const tierIndex = preference?.rewardTierIndex ?? tiers.length - 1;
-                            const currentTier = tiers[tierIndex];
-                            const currentBeans = currentTier?.beans ?? 0;
-                            const currentLevel = currentTier?.level;
-                            const isUpDisabled = tierIndex >= tiers.length - 1;
-                            const isDownDisabled = tierIndex <= 0;
+            <div className="space-y-2 max-h-96 overflow-y-auto pr-2 pb-40">
+              {sortedAvailableSlots.length > 0 ? (
+                sortedAvailableSlots.map(({ event, slot }) => {
+                    const slotIdentifier = `${event.name}|${slot.time}|${slot.duration}`;
+                    const tiers = event.rewardTiers;
+                    const preference = user.preferredSlots.get(slotIdentifier);
+                    const isSelected = preference?.isSelected ?? false;
+                    const tierIndex = preference?.rewardTierIndex ?? tiers.length - 1;
+                    const currentTier = tiers[tierIndex];
+                    const currentBeans = currentTier?.beans ?? 0;
+                    const currentLevel = currentTier?.level;
+                    const isUpDisabled = tierIndex >= tiers.length - 1;
+                    const isDownDisabled = tierIndex <= 0;
 
-                            return (
-                                <div key={slot.id} className="relative group">
-                                    <div className="flex items-center justify-between p-3 bg-gray-100 dark:bg-[#2a233a] rounded-md hover:bg-purple-50 dark:hover:bg-purple-900/50 transition-colors">
-                                        <div className="flex items-center">
-                                            <input type="checkbox" checked={isSelected} onChange={() => handleSlotToggle(slotIdentifier)} className="h-4 w-4 rounded bg-gray-200 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-purple-600 focus:ring-purple-500" />
-                                            <span className="ml-3 text-gray-700 dark:text-gray-300">
-                                              <span className="inline-block w-6 text-right mr-2 text-gray-500 dark:text-gray-400">{slotCounter}.</span>
-                                              {formatTime(slot.time, user.timeFormat, event, user.timeZone)} for {slot.duration}m
-                                            </span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                          <span className="text-green-600 dark:text-green-400 font-medium text-sm">
-                                            ~{currentBeans.toLocaleString()} beans
-                                            {typeof currentLevel === 'number' && <span className="text-purple-500 dark:text-purple-300 text-xs ml-1">(Lv.{currentLevel})</span>}
-                                          </span>
-                                          <div className="flex flex-col">
-                                            <button onClick={() => handleRewardLevelChange(slotIdentifier, 'up')} disabled={isUpDisabled} className="disabled:opacity-20 text-gray-800 dark:text-white h-4 w-4 flex items-center justify-center rounded-sm hover:bg-black/10 dark:hover:bg-white/20">▲</button>
-                                            <button onClick={() => handleRewardLevelChange(slotIdentifier, 'down')} disabled={isDownDisabled} className="disabled:opacity-20 text-gray-800 dark:text-white h-4 w-4 flex items-center justify-center rounded-sm hover:bg-black/10 dark:hover:bg-white/20">▼</button>
-                                          </div>
-                                        </div>
-                                    </div>
-                                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max max-w-xs p-3 bg-white dark:bg-[#10101a] border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-white text-sm rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20">
-                                        <h4 className="font-bold text-purple-600 dark:text-purple-400">Reward Structure</h4>
-                                        <p className="text-xs text-gray-600 dark:text-gray-300 mb-2">This event has {tiers.length} reward tiers.</p>
-                                        <ul className="list-disc list-inside text-xs space-y-1">
-                                            {tiers.map((tier) => <li key={tier.level}>Lv.{tier.level}: {tier.beans.toLocaleString()} beans {tier.description && `(${tier.description})`}</li>)}
-                                        </ul>
+                    return (
+                        <div key={slotIdentifier} className="relative group">
+                            <div className="flex items-center justify-between p-3 bg-gray-100 dark:bg-[#2a233a] rounded-md hover:bg-purple-50 dark:hover:bg-purple-900/50 transition-colors">
+                                <div className="flex items-center">
+                                    <input type="checkbox" checked={isSelected} onChange={() => handleSlotToggle(slotIdentifier)} className="h-4 w-4 rounded bg-gray-200 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-purple-600 focus:ring-purple-500" />
+                                    <span className="ml-3 text-gray-700 dark:text-gray-300 text-sm">
+                                        <span className="font-semibold text-purple-600 dark:text-purple-400">{event.name}</span>
+                                        <span className="text-gray-500 dark:text-gray-400 mx-1">-</span>
+                                        {formatTime(slot.time, user.timeFormat, event, user.timeZone)} for {slot.duration}m
+                                    </span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-green-600 dark:text-green-400 font-medium text-sm">
+                                    ~{currentBeans.toLocaleString()}
+                                    {typeof currentLevel === 'number' && <span className="text-purple-500 dark:text-purple-300 text-xs ml-1">(Lv.{currentLevel})</span>}
+                                    </span>
+                                    <div className="flex flex-col">
+                                    <button onClick={() => handleRewardLevelChange(slotIdentifier, 'up')} disabled={isUpDisabled} className="disabled:opacity-20 text-gray-800 dark:text-white h-4 w-4 flex items-center justify-center rounded-sm hover:bg-black/10 dark:hover:bg-white/20">▲</button>
+                                    <button onClick={() => handleRewardLevelChange(slotIdentifier, 'down')} disabled={isDownDisabled} className="disabled:opacity-20 text-gray-800 dark:text-white h-4 w-4 flex items-center justify-center rounded-sm hover:bg-black/10 dark:hover:bg-white/20">▼</button>
                                     </div>
                                 </div>
-                            )
-                        })}
-                      </div>
-                    </div>
-                  ))
-                })()
+                            </div>
+                        </div>
+                    )
+                })
                ) : (
                 <div className="text-center py-10">
                   <p className="text-gray-400 dark:text-gray-500">
@@ -510,10 +614,11 @@ const SettingsPage: React.FC = () => {
              <h2 className="text-xl font-semibold mb-4">Goal Progress</h2>
              <div className="space-y-2">
                 <p className="font-bold text-lg">{goalProgress.statusMessage}</p>
-                {user.monthlyBeanGoal > 0 && goalProgress.remainingGoal > 0 && (
+                {user.monthlyBeanGoal > 0 && (
                     <>
-                        <p>Remaining Goal: {goalProgress.remainingGoal.toLocaleString()} beans</p>
+                        {goalProgress.remainingGoal > 0 && <p>Remaining Goal: {goalProgress.remainingGoal.toLocaleString()} beans</p>}
                         <p>Days Left This Month: {goalProgress.remainingDays}</p>
+                        <p>Hours Left To Goal: {goalProgress.hoursLeftToGoal.toLocaleString()}</p>
                     </>
                 )}
              </div>
@@ -531,6 +636,33 @@ const SettingsPage: React.FC = () => {
       {saveMessage && (
         <div className="fixed bottom-8 right-8 bg-green-500 text-white py-3 px-6 rounded-lg shadow-xl animate-fade-in-out z-50">
           {saveMessage}
+        </div>
+      )}
+
+      {isDatesModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4" onClick={() => setIsDatesModalOpen(false)}>
+          <div className="bg-white dark:bg-[#1a1625] rounded-lg shadow-xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Your Preferred Dates Reminder</h3>
+            <div className="max-h-60 overflow-y-auto bg-gray-100 dark:bg-[#2a233a] p-4 rounded-md">
+              {formattedPreferredDates.length > 0 ? (
+                formattedPreferredDates.map(group => (
+                  <div key={group.id} className="text-sm py-1 text-gray-800 dark:text-gray-200">
+                    {group.displayString}
+                  </div>
+                ))
+              ) : (
+                <p className="text-gray-500 dark:text-gray-400">You haven't selected any preferred dates on the Admin Tools page.</p>
+              )}
+            </div>
+            <div className="mt-6 text-right">
+              <button
+                onClick={() => setIsDatesModalOpen(false)}
+                className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
+              >
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

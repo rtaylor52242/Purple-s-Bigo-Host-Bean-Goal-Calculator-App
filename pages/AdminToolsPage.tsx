@@ -183,7 +183,7 @@ const AdminToolsPage: React.FC = () => {
               <Calendar selectedDates={user.preferredDates || new Set()} onDatesChange={handleCalendarDatesChange} />
             </div>
             <div className="flex flex-col h-full min-h-[350px]"> {/* Adjusted to h-full for better vertical alignment, set a min-height */}
-              <label htmlFor="selected-dates-display" className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Selected Dates:</label>
+              <label htmlFor="selected-dates-display" className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Selected Preferred Dates:</label>
               <div className="mb-2">
                 <span className="text-sm font-medium text-purple-600 dark:text-purple-400 bg-purple-100 dark:bg-purple-900/50 px-2.5 py-1 rounded-full">
                   Total Unique Days: {uniqueDaysCount}

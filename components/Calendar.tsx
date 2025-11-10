@@ -126,10 +126,11 @@ const Calendar: React.FC<CalendarProps> = ({ selectedDates, onDatesChange }) => 
       .map(day => day.date.toISOString().split('T')[0]);
   }, [daysInCalendar]);
 
-  // Helper to get all ISO date strings for the week containing currentMonth (full 7 days)
-  const getDaysForFullCurrentWeek = useCallback((): string[] => {
-    const startOfWeek = new Date(currentMonth);
-    startOfWeek.setDate(currentMonth.getDate() - currentMonth.getDay()); // Go to Sunday of current week
+  // FIX: This function now correctly gets the *actual* current week based on today's date, not the displayed month.
+  const getDaysForActualCurrentWeek = useCallback((): string[] => {
+    const today = new Date();
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - today.getDay()); // Go to Sunday of current week
     const weekDays: string[] = [];
     for (let i = 0; i < 7; i++) {
       const day = new Date(startOfWeek);
@@ -137,7 +138,8 @@ const Calendar: React.FC<CalendarProps> = ({ selectedDates, onDatesChange }) => 
       weekDays.push(day.toISOString().split('T')[0]);
     }
     return weekDays;
-  }, [currentMonth]);
+  }, []);
+
 
   // Helper to get all ISO date strings for weekends in the current month
   const getDaysForWeekendsInMonth = useCallback((): string[] => {
@@ -170,15 +172,11 @@ const Calendar: React.FC<CalendarProps> = ({ selectedDates, onDatesChange }) => 
     handleToggleSelection(getCurrentMonthOnlyDays(), 'month');
   }, [getCurrentMonthOnlyDays, handleToggleSelection]);
 
+  // FIX: This handler now uses the corrected function to select the actual current week.
   const handleToggleCurrentWeekSelection = useCallback(() => {
-    // Get full 7 days of the current week (can span months)
-    const fullWeekDaysIso = getDaysForFullCurrentWeek();
-    // Filter to only include days that are actually in the current month display
-    const currentMonthInteractiveWeekDaysIso = fullWeekDaysIso.filter(iso =>
-      daysInCalendar.some(dayInfo => dayInfo.isCurrentMonth && dayInfo.date.toISOString().split('T')[0] === iso)
-    );
-    handleToggleSelection(currentMonthInteractiveWeekDaysIso, 'week');
-  }, [getDaysForFullCurrentWeek, daysInCalendar, handleToggleSelection]);
+    const fullWeekDaysIso = getDaysForActualCurrentWeek();
+    handleToggleSelection(fullWeekDaysIso, 'week');
+  }, [getDaysForActualCurrentWeek, handleToggleSelection]);
 
   const handleToggleWeekendsSelection = useCallback(() => {
     handleToggleSelection(getDaysForWeekendsInMonth(), 'weekends');
@@ -208,14 +206,9 @@ const Calendar: React.FC<CalendarProps> = ({ selectedDates, onDatesChange }) => 
   const currentMonthDaysOnly = getCurrentMonthOnlyDays();
   const allCurrentMonthDaysSelected = currentMonthDaysOnly.length > 0 && currentMonthDaysOnly.every(day => selectedDates.has(day));
 
-  // Determine if all current week days (based on currentMonth reference and filtered by isCurrentMonth) are selected
-  const currentWeekDaysFiltered = useMemo(() => {
-    const fullWeek = getDaysForFullCurrentWeek();
-    return fullWeek.filter(iso =>
-      daysInCalendar.some(dayInfo => dayInfo.isCurrentMonth && dayInfo.date.toISOString().split('T')[0] === iso)
-    );
-  }, [getDaysForFullCurrentWeek, daysInCalendar]);
-  const allCurrentWeekDaysSelected = currentWeekDaysFiltered.length > 0 && currentWeekDaysFiltered.every(day => selectedDates.has(day));
+  // FIX: Logic updated to check against the *actual* current week.
+  const currentWeekDays = useMemo(() => getDaysForActualCurrentWeek(), [getDaysForActualCurrentWeek]);
+  const allCurrentWeekDaysSelected = currentWeekDays.length > 0 && currentWeekDays.every(day => selectedDates.has(day));
 
   // Determine if all weekends in current month are selected
   const weekendsInMonth = getDaysForWeekendsInMonth();
@@ -224,6 +217,12 @@ const Calendar: React.FC<CalendarProps> = ({ selectedDates, onDatesChange }) => 
   // Determine if all weekdays in current month are selected
   const weekdaysInMonth = getDaysForWeekdaysInMonth();
   const allWeekdaysInMonthSelected = weekdaysInMonth.length > 0 && weekdaysInMonth.every(day => selectedDates.has(day));
+  
+  // FIX: Add check to see if the calendar is currently showing the actual current month.
+  const isViewingCurrentMonth = useMemo(() => {
+    const today = new Date();
+    return currentMonth.getMonth() === today.getMonth() && currentMonth.getFullYear() === today.getFullYear();
+  }, [currentMonth]);
 
   return (
     <div className="p-4 bg-gray-50 dark:bg-[#2a233a] rounded-lg">
@@ -257,7 +256,8 @@ const Calendar: React.FC<CalendarProps> = ({ selectedDates, onDatesChange }) => 
         </button>
         <button
           onClick={handleToggleCurrentWeekSelection}
-          className="w-full bg-purple-100 dark:bg-purple-800 text-purple-700 dark:text-white py-2 rounded-md hover:bg-purple-200 dark:hover:bg-purple-700 transition-colors text-sm font-medium"
+          disabled={!isViewingCurrentMonth} // FIX: Button is disabled if not viewing the current month.
+          className="w-full bg-purple-100 dark:bg-purple-800 text-purple-700 dark:text-white py-2 rounded-md hover:bg-purple-200 dark:hover:bg-purple-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           aria-label={allCurrentWeekDaysSelected ? "Deselect all days in current week" : "Select all days in current week"}
         >
           {allCurrentWeekDaysSelected ? 'Deselect Current Week' : 'Select Current Week'}
