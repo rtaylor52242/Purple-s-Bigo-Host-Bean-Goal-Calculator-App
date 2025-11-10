@@ -41,6 +41,7 @@ export interface UserProfile {
   maxPathways?: number;
   currentHours?: number;
   currentForeignBeanCount?: number;
+  preferredDates?: Set<string>; // New: Stores selected dates from the calendar as ISO strings
 }
 
 export interface EventSlot {

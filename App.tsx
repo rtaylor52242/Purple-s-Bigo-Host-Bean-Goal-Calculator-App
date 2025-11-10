@@ -1,5 +1,3 @@
-
-
 import React, { useState, createContext, useContext, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { UserProfile, Event, AdminUploadState, UploadHistoryItem, SlotPreference, RegionalTier } from './types';
@@ -10,8 +8,8 @@ import AdminToolsPage from './pages/AdminToolsPage';
 import LoginPage from './pages/LoginPage';
 import { defaultRegionalTiers } from './data/defaultTiers';
 
-// Mock Data
-const initialUser: UserProfile = {
+// Mock Data - used as a fallback if no saved data, or to fill missing fields
+const defaultInitialUser: UserProfile = {
   bigoUserId: 'Bigo-Host1',
   phoneNumber: '+15551234567',
   enableSms: true,
@@ -23,6 +21,7 @@ const initialUser: UserProfile = {
   maxPathways: 10,
   currentHours: 0,
   currentForeignBeanCount: 0,
+  preferredDates: new Set<string>(), // Initialize new preferredDates
 };
 
 const initialEvents: Event[] = [];
@@ -35,6 +34,35 @@ export const initialAdminUploadState: AdminUploadState = {
   ocrResult: null,
   processedEvent: null,
   selectedOcrSlots: new Set<string>(),
+};
+
+// Function to load user profile from localStorage
+const loadUserProfileFromLocalStorage = (): UserProfile => {
+  try {
+    const savedUser = localStorage.getItem('purpleAppUserProfile');
+    if (savedUser) {
+      const parsedUser: UserProfile = JSON.parse(savedUser);
+      // Reconstruct Map from array
+      if (parsedUser.preferredSlots && Array.isArray(parsedUser.preferredSlots)) {
+        parsedUser.preferredSlots = new Map(parsedUser.preferredSlots as unknown as Iterable<readonly [string, SlotPreference]>);
+      } else {
+        parsedUser.preferredSlots = new Map();
+      }
+      // Reconstruct Set from array for preferredDates
+      if (parsedUser.preferredDates && Array.isArray(parsedUser.preferredDates)) {
+        parsedUser.preferredDates = new Set(parsedUser.preferredDates);
+      } else {
+        parsedUser.preferredDates = new Set();
+      }
+      // Merge with default to ensure all fields are present, especially new ones
+      return { ...defaultInitialUser, ...parsedUser };
+    }
+  } catch (error) {
+    console.error("Failed to load user profile from localStorage:", error);
+    // Clear corrupted data if parsing fails
+    localStorage.removeItem('purpleAppUserProfile');
+  }
+  return defaultInitialUser;
 };
 
 
@@ -72,7 +100,7 @@ const ProtectedRoute: React.FC<{ element: React.ReactElement }> = ({ element }) 
 
 
 const App: React.FC = () => {
-  const [user, setUser] = useState<UserProfile>(initialUser);
+  const [user, setUser] = useState<UserProfile>(loadUserProfileFromLocalStorage());
   const [events, setEvents] = useState<Event[]>(initialEvents);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [adminUploadState, setAdminUploadState] = useState<AdminUploadState>(initialAdminUploadState);
@@ -87,6 +115,21 @@ const App: React.FC = () => {
       document.documentElement.classList.remove('dark');
     }
   }, [theme]);
+
+  // Auto-save user profile to localStorage whenever the user state changes
+  useEffect(() => {
+    try {
+      // Convert Map to array for JSON serialization
+      const userToSave = {
+        ...user,
+        preferredSlots: Array.from(user.preferredSlots.entries()),
+        preferredDates: user.preferredDates ? Array.from(user.preferredDates) : [], // Convert Set to Array
+      };
+      localStorage.setItem('purpleAppUserProfile', JSON.stringify(userToSave));
+    } catch (error) {
+      console.error("Failed to auto-save user profile to localStorage:", error);
+    }
+  }, [user]);
 
 
   const contextValue: AppContextType = {

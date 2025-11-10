@@ -1,5 +1,3 @@
-
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '../App';
 import { UserProfile, Event, EventSlot, SlotPreference } from '../types';
@@ -9,6 +7,7 @@ const SettingsPage: React.FC = () => {
   const { user, setUser, events, regionalTiers } = useAppContext();
   const [maxPathwaysError, setMaxPathwaysError] = useState('');
   const [isBigoIdLocked, setIsBigoIdLocked] = useState(true);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
   useEffect(() => {
     // FIX: Corrected typo from `regionalTers` to `regionalTiers`.
@@ -83,7 +82,8 @@ const SettingsPage: React.FC = () => {
   const remainingDaysInMonth = useMemo(() => {
     const today = new Date();
     const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-    return lastDayOfMonth.getDate() - today.getDate();
+    // Include the current day in the count
+    return lastDayOfMonth.getDate() - today.getDate() + 1; 
   }, []);
 
   useEffect(() => {
@@ -109,13 +109,14 @@ const SettingsPage: React.FC = () => {
             const digits = value.replace(/\D/g, '');
             newValue = `+${digits}`;
         }
-    } else if (name === 'currentBeanCount' || name === 'monthlyBeanGoal' || name === 'currentHours' || name === 'currentForeignBeanCount') {
+    } else if (['currentBeanCount', 'monthlyBeanGoal', 'currentHours', 'currentForeignBeanCount'].includes(name)) {
         const num = parseInt(value.replace(/,/g, ''), 10);
-        newValue = isNaN(num) ? 0 : num;
+        newValue = isNaN(num) ? 0 : num; // Ensure it's a number, default to 0
     } else if (type === 'number') {
         const num = parseInt(value, 10);
         if (name === 'maxPathways') {
-            newValue = isNaN(num) ? undefined : Math.max(0, Math.min(num, 20)); // Cap at 20, prevent negative
+            // Allow empty string to mean undefined, otherwise cap between 0 and 20
+            newValue = value === '' ? undefined : Math.max(0, Math.min(num, 20)); 
         } else {
             newValue = num || 0;
         }
@@ -207,6 +208,15 @@ const SettingsPage: React.FC = () => {
     });
   };
 
+  const handleSaveSettings = () => {
+    // Rely on App.tsx's useEffect to auto-save any changes to the user object.
+    // This button primarily provides visual feedback to the user.
+    setSaveMessage("Settings saved!");
+    setTimeout(() => {
+      setSaveMessage(null);
+    }, 3000); // Message disappears after 3 seconds
+  };
+
   const goalProgress = useMemo(() => {
     const { monthlyBeanGoal, currentBeanCount } = user;
     if (monthlyBeanGoal <= 0) return { dailyBeansNeeded: 0, remainingGoal: 0, remainingDays: 0, statusMessage: 'Set a monthly goal to see your progress.' };
@@ -215,7 +225,8 @@ const SettingsPage: React.FC = () => {
     const today = new Date();
     const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
     
-    const remainingDaysForCalc = Math.max(1, lastDayOfMonth.getDate() - today.getDate() + 1);
+    // Add 1 to include the current day in remaining days calculation
+    const remainingDaysForCalc = Math.max(1, lastDayOfMonth.getDate() - today.getDate() + 1); 
     const remainingDaysForDisplay = lastDayOfMonth.getDate() - today.getDate();
 
     const daysToStream = remainingDaysForCalc;
@@ -461,7 +472,7 @@ const SettingsPage: React.FC = () => {
               <div>
                 <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Days Remaining to Stream this Month</label>
                 <div className="w-full bg-gray-200 dark:bg-[#322b44] border border-gray-300 dark:border-gray-600 rounded-md py-2 px-3 text-gray-700 dark:text-gray-300 cursor-not-allowed">
-                  {remainingDaysInMonth + 1}
+                  {remainingDaysInMonth}
                 </div>
               </div>
               <div>
@@ -486,7 +497,7 @@ const SettingsPage: React.FC = () => {
                 <input 
                   type="number" 
                   name="maxPathways" 
-                  value={user.maxPathways || ''} 
+                  value={user.maxPathways === undefined ? '' : user.maxPathways} 
                   onChange={handleInputChange} 
                   min="0"
                   className={`w-full bg-gray-100 dark:bg-[#2a233a] border rounded-md py-2 px-3 text-gray-900 dark:text-white focus:ring-purple-500 ${maxPathwaysError ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'}`}
@@ -512,6 +523,19 @@ const SettingsPage: React.FC = () => {
           </div>
         </div>
       </div>
+      <div className="flex justify-center mt-8 w-full max-w-lg">
+        <button
+          onClick={handleSaveSettings}
+          className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold py-3 px-6 rounded-lg shadow-lg hover:from-purple-700 hover:to-indigo-700 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-900 focus:ring-indigo-500"
+        >
+          Save All Changes
+        </button>
+      </div>
+      {saveMessage && (
+        <div className="fixed bottom-8 right-8 bg-green-500 text-white py-3 px-6 rounded-lg shadow-xl animate-fade-in-out z-50">
+          {saveMessage}
+        </div>
+      )}
     </div>
   );
 };

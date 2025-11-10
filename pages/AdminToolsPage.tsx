@@ -1,9 +1,10 @@
-
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { extractRegionalTiersFromImage } from '../services/geminiService';
 import { useAppContext } from '../App';
 import { defaultRegionalTiers } from '../data/defaultTiers';
+import Calendar from '../components/Calendar'; // Import the new Calendar component
+import { formatSelectedDatesForDisplay } from '../utils/date'; // Import the new utility
 
 const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -21,13 +22,14 @@ const UploadIcon = () => (
 );
 
 const AdminToolsPage: React.FC = () => {
-  const { regionalTiers, setRegionalTiers, setUser } = useAppContext();
+  const { regionalTiers, setRegionalTiers, user, setUser } = useAppContext();
   const navigate = useNavigate();
 
   const [tierChartFile, setTierChartFile] = useState<File | null>(null);
   const [tierChartPreview, setTierChartPreview] = useState<string | null>(null);
   const [isProcessingTierChart, setIsProcessingTierChart] = useState(false);
   const [tierChartError, setTierChartError] = useState<string | null>(null);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [imageForModal, setImageForModal] = useState<string | null>(null);
@@ -35,6 +37,22 @@ const AdminToolsPage: React.FC = () => {
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [startDrag, setStartDrag] = useState({ x: 0, y: 0 });
+
+  // Handler for when calendar dates change (Calendar is now a controlled component)
+  const handleCalendarDatesChange = useCallback((newSelectedDates: Set<string>) => {
+    setUser(prevUser => ({
+      ...prevUser,
+      preferredDates: newSelectedDates,
+    }));
+  }, [setUser]);
+
+  const handleDeleteSelectedDateGroup = useCallback((datesToDelete: string[]) => {
+    setUser(prevUser => {
+      const newPreferredDates = new Set(prevUser.preferredDates || []); // Use existing or new Set
+      datesToDelete.forEach(dateIso => newPreferredDates.delete(dateIso));
+      return { ...prevUser, preferredDates: newPreferredDates };
+    });
+  }, [setUser]);
 
   const handleTierChartFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -114,12 +132,25 @@ const AdminToolsPage: React.FC = () => {
   
   const handleSetMonthlyGoal = (goal: number) => {
     if (window.confirm(`Would you like to set ${goal.toLocaleString()} as your Monthly Bean Goal?`)) {
-        setUser(prevUser => ({
-            ...prevUser,
-            monthlyBeanGoal: goal,
-        }));
+        setUser(prevUser => {
+            const updatedUser = {
+                ...prevUser,
+                monthlyBeanGoal: goal,
+            };
+            // The auto-save useEffect in App.tsx will handle persistence
+            return updatedUser;
+        });
         navigate('/settings');
     }
+  };
+
+  const handleSaveAllChanges = () => {
+    // The auto-save useEffect in App.tsx already saves user changes.
+    // This button primarily provides visual feedback.
+    setSaveMessage("Settings saved!");
+    setTimeout(() => {
+      setSaveMessage(null);
+    }, 3000); // Message disappears after 3 seconds
   };
 
   // --- Modal and Zoom handlers ---
@@ -133,11 +164,72 @@ const AdminToolsPage: React.FC = () => {
   const handleZoomOut = () => setScale(p => Math.max(p / 1.2, 0.5));
   const handleResetZoom = () => { setScale(1); setPosition({ x: 0, y: 0 }); };
 
+  const formattedSelectedDates = formatSelectedDatesForDisplay(user.preferredDates || new Set());
+  
+  const uniqueDaysCount = useMemo(() => {
+    return user.preferredDates?.size || 0;
+  }, [user.preferredDates]);
+
   return (
     <div className="flex flex-col items-center">
       <div className="w-full max-w-4xl">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white text-center mb-8">Admin Tools</h1>
         
+        {/* Calendar Component */}
+        <div className="bg-white dark:bg-[#1a1625] p-6 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 mb-8">
+          <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Select Preferred Dates</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start"> {/* New Grid Layout, items-start for top alignment */}
+            <div>
+              <Calendar selectedDates={user.preferredDates || new Set()} onDatesChange={handleCalendarDatesChange} />
+            </div>
+            <div className="flex flex-col h-full min-h-[350px]"> {/* Adjusted to h-full for better vertical alignment, set a min-height */}
+              <label htmlFor="selected-dates-display" className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Selected Dates:</label>
+              <div className="mb-2">
+                <span className="text-sm font-medium text-purple-600 dark:text-purple-400 bg-purple-100 dark:bg-purple-900/50 px-2.5 py-1 rounded-full">
+                  Total Unique Days: {uniqueDaysCount}
+                </span>
+              </div>
+              <div 
+                id="selected-dates-display" 
+                className="flex-grow w-full bg-gray-100 dark:bg-[#2a233a] border border-gray-300 dark:border-gray-600 rounded-md py-2 px-3 text-gray-900 dark:text-white overflow-y-auto"
+                aria-label="Selected dates from calendar"
+              >
+                {formattedSelectedDates.length > 0 ? (
+                  formattedSelectedDates.map(group => (
+                    <div key={group.id} className="flex items-center justify-between text-sm py-1">
+                      <span>{group.displayString}</span>
+                      <button 
+                        onClick={() => handleDeleteSelectedDateGroup(group.datesInGroup)}
+                        className="ml-2 p-1 rounded-full text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50"
+                        aria-label={`Delete ${group.displayString}`}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-gray-400 dark:text-gray-500">No dates selected.</p>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-center mt-8 w-full max-w-lg mx-auto">
+            <button
+              onClick={handleSaveAllChanges}
+              className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold py-3 px-6 rounded-lg shadow-lg hover:from-purple-700 hover:to-indigo-700 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-900 focus:ring-indigo-500"
+            >
+              Save All Changes
+            </button>
+          </div>
+          {saveMessage && (
+            <div className="fixed bottom-8 right-8 bg-green-500 text-white py-3 px-6 rounded-lg shadow-xl animate-fade-in-out z-50">
+              {saveMessage}
+            </div>
+          )}
+        </div>
+
         <div className="bg-white dark:bg-[#1a1625] p-8 mt-8 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 space-y-6">
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white text-center">Regional Tier Chart</h2>
             <div className="space-y-4">
