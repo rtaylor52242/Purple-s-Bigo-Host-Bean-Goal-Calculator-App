@@ -1,13 +1,27 @@
-
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '../App';
-import { UserProfile, Event, EventSlot, SlotPreference } from '../types';
+import { UserProfile, Event, EventSlot, SlotPreference, RegionalTier } from '../types';
 import { formatTime } from '../utils/time';
 
 const SettingsPage: React.FC = () => {
-  const { user, setUser, events } = useAppContext();
+  const { user, setUser, events, regionalTiers } = useAppContext();
   const [maxPathwaysError, setMaxPathwaysError] = useState('');
+  const [isBigoIdLocked, setIsBigoIdLocked] = useState(true); // Re-added
+  const [saveMessage, setSaveMessage] = useState<string | null>(null); // Re-added
+
+  useEffect(() => {
+    // Corrected typo from `regionalTers` to `regionalTiers` in older versions.
+    if (regionalTiers && regionalTiers.length > 0) {
+      const availableGoals = regionalTiers.map(t => t.goal);
+      if (!availableGoals.includes(user.monthlyBeanGoal)) {
+        setUser(prev => ({
+          ...prev,
+          // Set to the first goal in the list which is the highest
+          monthlyBeanGoal: availableGoals[0],
+        }));
+      }
+    }
+  }, [regionalTiers, user.monthlyBeanGoal, setUser]);
 
   const timeZoneOptions = useMemo(() => {
     try {
@@ -60,10 +74,16 @@ const SettingsPage: React.FC = () => {
     return grouped;
   }, [events, user.preferredSlots]);
 
+  const totalAvailableSlots = useMemo(() => {
+    // FIX: Explicitly type the accumulator `count` to `number` to resolve a type inference issue.
+    return Array.from(availableSlotsByEvent.values()).reduce((count: number, eventData: { slots: EventSlot[] }) => count + eventData.slots.length, 0);
+  }, [availableSlotsByEvent]);
+
   const remainingDaysInMonth = useMemo(() => {
     const today = new Date();
     const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-    return lastDayOfMonth.getDate() - today.getDate();
+    // Include the current day in the count
+    return lastDayOfMonth.getDate() - today.getDate() + 1; 
   }, []);
 
   useEffect(() => {
@@ -89,13 +109,14 @@ const SettingsPage: React.FC = () => {
             const digits = value.replace(/\D/g, '');
             newValue = `+${digits}`;
         }
-    } else if (name === 'currentBeanCount' || name === 'monthlyBeanGoal') {
+    } else if (['currentBeanCount', 'monthlyBeanGoal', 'currentHours', 'currentForeignBeanCount'].includes(name)) {
         const num = parseInt(value.replace(/,/g, ''), 10);
-        newValue = isNaN(num) ? 0 : num;
+        newValue = isNaN(num) ? 0 : num; // Ensure it's a number, default to 0
     } else if (type === 'number') {
         const num = parseInt(value, 10);
         if (name === 'maxPathways') {
-            newValue = isNaN(num) ? undefined : Math.min(num, 20); // Cap at 20
+            // Allow empty string to mean undefined, otherwise cap between 0 and 20
+            newValue = value === '' ? undefined : Math.max(0, Math.min(num, 20)); 
         } else {
             newValue = num || 0;
         }
@@ -111,7 +132,6 @@ const SettingsPage: React.FC = () => {
   
   const handleSlotToggle = (slotIdentifier: string) => {
     setUser(prevUser => {
-        // FIX: Explicitly type the Map to prevent type inference issues.
         const newPreferredSlots = new Map<string, SlotPreference>(prevUser.preferredSlots);
         const currentPref: SlotPreference | undefined = newPreferredSlots.get(slotIdentifier);
         const details = slotDetailsMap.get(slotIdentifier);
@@ -133,7 +153,6 @@ const SettingsPage: React.FC = () => {
     const tierCount = details.event.rewardTiers.length;
 
     setUser(prevUser => {
-        // FIX: Explicitly type the Map to prevent type inference issues.
         const newPreferredSlots = new Map<string, SlotPreference>(prevUser.preferredSlots);
         const currentPref: SlotPreference | undefined = newPreferredSlots.get(slotIdentifier);
         const highestTierIndex = tierCount - 1;
@@ -149,7 +168,7 @@ const SettingsPage: React.FC = () => {
 
         if (nextTierIndex !== currentTierIndex) {
             newPreferredSlots.set(slotIdentifier, {
-                isSelected: currentPref?.isSelected ?? false, // Do not auto-select
+                isSelected: currentPref?.isSelected ?? false,
                 rewardTierIndex: nextTierIndex,
             });
         }
@@ -166,7 +185,6 @@ const SettingsPage: React.FC = () => {
   
   const handleSelectAll = () => {
     setUser(prevUser => {
-        // FIX: Explicitly type the Map to prevent type inference issues.
         const newPreferredSlots = new Map<string, SlotPreference>(prevUser.preferredSlots);
         slotDetailsMap.forEach((details, identifier) => {
             const currentPref: SlotPreference | undefined = newPreferredSlots.get(identifier);
@@ -182,7 +200,6 @@ const SettingsPage: React.FC = () => {
 
   const handleClearAll = () => {
     setUser(prevUser => {
-        // FIX: Explicitly type the Map to prevent type inference issues.
         const newPreferredSlots = new Map<string, SlotPreference>(prevUser.preferredSlots);
         newPreferredSlots.forEach((pref: SlotPreference, key) => {
             newPreferredSlots.set(key, { ...pref, isSelected: false });
@@ -191,17 +208,40 @@ const SettingsPage: React.FC = () => {
     });
   };
 
+  const handleSaveSettings = () => {
+    // Rely on App.tsx's useEffect to auto-save any changes to the user object.
+    // This button primarily provides visual feedback to the user.
+    setSaveMessage("Settings saved!");
+    setTimeout(() => {
+      setSaveMessage(null);
+    }, 3000); // Message disappears after 3 seconds
+  };
+
   const goalProgress = useMemo(() => {
+    // === START DIAGNOSTIC LOGS ===
+    console.log('SettingsPage (goalProgress useMemo) - Start');
+    console.log('  user.monthlyBeanGoal (initial in useMemo):', user.monthlyBeanGoal);
+    console.log('  user.currentHours (initial in useMemo):', user.currentHours);
+    console.log('  regionalTiers (initial in useMemo):', regionalTiers);
+    // === END DIAGNOSTIC LOGS ===
+
     const { monthlyBeanGoal, currentBeanCount } = user;
-    if (monthlyBeanGoal <= 0) return { dailyBeansNeeded: 0, remainingGoal: 0, remainingDays: 0, statusMessage: 'Set a monthly goal to see your progress.' };
+    
+    if (!regionalTiers || regionalTiers.length === 0) {
+      console.warn('SettingsPage (goalProgress useMemo): regionalTiers is null or empty. Cannot calculate hours left.');
+      return { dailyBeansNeeded: 0, remainingGoal: 0, remainingDays: 0, statusMessage: 'Regional tiers not loaded.', hoursLeftToGoal: 0 };
+    }
+
+    if (monthlyBeanGoal <= 0) {
+      console.log('SettingsPage (goalProgress useMemo): monthlyBeanGoal is 0 or less. Returning early.');
+      return { dailyBeansNeeded: 0, remainingGoal: 0, remainingDays: 0, statusMessage: 'Set a monthly goal to see your progress.', hoursLeftToGoal: 0 };
+    }
 
     const remainingGoal = Math.max(0, monthlyBeanGoal - currentBeanCount);
-    const today = new Date();
-    const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
     
-    const remainingDaysForCalc = Math.max(1, lastDayOfMonth.getDate() - today.getDate() + 1);
-    const remainingDaysForDisplay = lastDayOfMonth.getDate() - today.getDate();
-    
+    const remainingDaysForCalc = Math.max(1, remainingDaysInMonth); // Use remainingDaysInMonth
+    const remainingDaysForDisplay = remainingDaysInMonth; // Fix: Directly use the calculated remainingDaysInMonth for display
+
     const daysToStream = remainingDaysForCalc;
 
     const dailyBeansNeeded = Math.ceil(remainingGoal / daysToStream);
@@ -210,8 +250,20 @@ const SettingsPage: React.FC = () => {
       ? `Goal Check: Need ${dailyBeansNeeded.toLocaleString()} beans per day!`
       : `Goal reached! You are ${(currentBeanCount - monthlyBeanGoal).toLocaleString()} beans over.`;
       
-    return { dailyBeansNeeded, remainingGoal, remainingDays: remainingDaysForDisplay, statusMessage };
-  }, [user, remainingDaysInMonth]);
+    // Determine hours left to goal
+    const selectedMonthlyGoalTier = regionalTiers.find(tier => tier.goal === user.monthlyBeanGoal);
+    
+    // Diagnostic log: Check selected tier
+    console.log('  SettingsPage (goalProgress useMemo): selectedMonthlyGoalTier =', selectedMonthlyGoalTier);
+
+    const hoursRequiredForGoal = selectedMonthlyGoalTier?.hoursRequired ?? 0;
+    const hoursLeftToGoal = Math.max(0, hoursRequiredForGoal - (user.currentHours ?? 0));
+
+    // Diagnostic log: Check final hoursLeftToGoal
+    console.log('  SettingsPage (goalProgress useMemo): hoursLeftToGoal (final) =', hoursLeftToGoal);
+
+    return { dailyBeansNeeded, remainingGoal, remainingDays: remainingDaysForDisplay, statusMessage, hoursLeftToGoal };
+  }, [user, remainingDaysInMonth, regionalTiers]);
 
   const selectedSlots = Array.from(user.preferredSlots.entries())
     .filter(([_, pref]) => pref.isSelected)
@@ -229,6 +281,18 @@ const SettingsPage: React.FC = () => {
     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400 dark:text-gray-500" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.414-1.415L11 9.586V6z" clipRule="evenodd" /></svg>
   );
 
+  const LockClosedIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400 dark:text-gray-500" viewBox="0 0 20 20" fill="currentColor">
+      <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+    </svg>
+  );
+
+  const LockOpenIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400 dark:text-gray-500" viewBox="0 0 20 20" fill="currentColor">
+      <path d="M10 2a5 5 0 00-5 5v2a2 2 0 00-2 2v5a2 2 0 002 2h10a2 2 0 002-2v-5a2 2 0 00-2-2V7a5 5 0 00-5-5zm0 9a3 3 0 100-6 3 3 0 000 6z" />
+    </svg>
+  );
+
 
   return (
     <div className="space-y-8">
@@ -241,17 +305,27 @@ const SettingsPage: React.FC = () => {
             <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Profile</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Bigo User ID</label>
+                <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Bigo ID</label>
                 <div className="relative">
                   <span className="absolute inset-y-0 left-0 flex items-center pl-3"><BigoUserIcon/></span>
-                  <input type="text" name="bigoUserId" value={user.bigoUserId} onChange={handleInputChange} className="pl-10 w-full bg-gray-100 dark:bg-[#2a233a] border border-gray-300 dark:border-gray-600 rounded-md py-2 px-3 text-gray-900 dark:text-white focus:ring-purple-500 focus:border-purple-500" />
+                  <input 
+                    type="text" 
+                    name="bigoUserId" 
+                    value={user.bigoUserId} 
+                    onChange={handleInputChange} 
+                    readOnly={isBigoIdLocked}
+                    className={`pl-10 pr-10 w-full bg-gray-100 dark:bg-[#2a233a] border border-gray-300 dark:border-gray-600 rounded-md py-2 px-3 text-gray-900 dark:text-white focus:ring-purple-500 focus:border-purple-500 ${isBigoIdLocked ? 'cursor-not-allowed opacity-70' : ''}`} 
+                    placeholder="Enter your Bigo ID" />
+                  <button onClick={() => setIsBigoIdLocked(!isBigoIdLocked)} className="absolute inset-y-0 right-0 flex items-center pr-3" aria-label={isBigoIdLocked ? 'Unlock Bigo ID field' : 'Lock Bigo ID field'}>
+                    {isBigoIdLocked ? <LockClosedIcon/> : <LockOpenIcon/>}
+                  </button>
                 </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Phone Number</label>
                  <div className="relative">
                   <span className="absolute inset-y-0 left-0 flex items-center pl-3"><PhoneIcon/></span>
-                  <input type="tel" name="phoneNumber" value={user.phoneNumber} onChange={handleInputChange} className="pl-10 w-full bg-gray-100 dark:bg-[#2a233a] border border-gray-300 dark:border-gray-600 rounded-md py-2 px-3 text-gray-900 dark:text-white focus:ring-purple-500 focus:border-purple-500" placeholder="+1234567890"/>
+                  <input type="tel" name="phoneNumber" value={user.phoneNumber} onChange={handleInputChange} className="pl-10 w-full bg-gray-100 dark:bg-[#2a233a] border border-gray-300 dark:border-gray-600 rounded-md py-2 px-3 text-gray-900 dark:text-white focus:ring-purple-500 focus:border-purple-500" placeholder="+1234567890" />
                  </div>
               </div>
               <div className="md:col-span-2">
@@ -290,6 +364,7 @@ const SettingsPage: React.FC = () => {
               <div className="mb-6">
                 <div className="flex justify-between items-center mb-3 border-b border-gray-200 dark:border-gray-700 pb-2">
                   <h3 className="text-lg font-medium text-purple-600 dark:text-purple-400">Your Selections</h3>
+                  <span className="text-sm font-medium text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/50 px-2.5 py-1 rounded-full">{selectedSlots.length} selected</span>
                 </div>
                 <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
                     {selectedSlots.map(([identifier, pref]) => {
@@ -331,7 +406,10 @@ const SettingsPage: React.FC = () => {
               </button>
             </div>
 
-            <h3 className="text-lg font-medium text-purple-600 dark:text-purple-400 mt-6 mb-2">All Available Slots</h3>
+            <div className="flex justify-between items-center mt-6 mb-2">
+              <h3 className="text-lg font-medium text-purple-600 dark:text-purple-400">All Available Slots</h3>
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-700/50 px-2.5 py-1 rounded-full">{totalAvailableSlots} available</span>
+            </div>
             <div className="space-y-6 max-h-96 overflow-y-auto pr-2 pb-40">
               {availableSlotsByEvent.size > 0 ? (
                 (() => {
@@ -400,31 +478,53 @@ const SettingsPage: React.FC = () => {
         </div>
 
         <div className="space-y-8">
-          {/* Bean Goals Card */}
+          {/* Goal Information Card */}
           <div className="bg-white dark:bg-[#1a1625] p-6 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
-            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Bean Goals</h2>
+            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Goal Information</h2>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Current Bean Count</label>
                 <input type="text" name="currentBeanCount" value={user.currentBeanCount.toLocaleString()} onChange={handleInputChange} className="w-full bg-gray-100 dark:bg-[#2a233a] border border-gray-300 dark:border-gray-600 rounded-md py-2 px-3 text-gray-900 dark:text-white focus:ring-purple-500 focus:border-purple-500" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Monthly Bean Goal</label>
-                <input type="text" name="monthlyBeanGoal" value={user.monthlyBeanGoal.toLocaleString()} onChange={handleInputChange} className="w-full bg-gray-100 dark:bg-[#2a233a] border border-gray-300 dark:border-gray-600 rounded-md py-2 px-3 text-gray-900 dark:text-white focus:ring-purple-500 focus:border-purple-500" />
+                <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Current Foreign Bean count</label>
+                <input type="text" name="currentForeignBeanCount" value={user.currentForeignBeanCount?.toLocaleString() ?? ''} onChange={handleInputChange} className="w-full bg-gray-100 dark:bg-[#2a233a] border border-gray-300 dark:border-gray-600 rounded-md py-2 px-3 text-gray-900 dark:text-white focus:ring-purple-500 focus:border-purple-500" />
+              </div>
+               <div>
+                <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Current Hours</label>
+                <input type="text" name="currentHours" value={user.currentHours?.toLocaleString() ?? ''} onChange={handleInputChange} className="w-full bg-gray-100 dark:bg-[#2a233a] border border-gray-300 dark:border-gray-600 rounded-md py-2 px-3 text-gray-900 dark:text-white focus:ring-purple-500 focus:border-purple-500" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Days Remaining to Stream this Month</label>
                 <div className="w-full bg-gray-200 dark:bg-[#322b44] border border-gray-300 dark:border-gray-600 rounded-md py-2 px-3 text-gray-700 dark:text-gray-300 cursor-not-allowed">
-                  {remainingDaysInMonth + 1}
+                  {remainingDaysInMonth}
                 </div>
+              </div>
+              <div>
+                <label htmlFor="monthlyBeanGoal" className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Monthly Bean Goal</label>
+                <select
+                  id="monthlyBeanGoal"
+                  name="monthlyBeanGoal"
+                  value={user.monthlyBeanGoal}
+                  onChange={handleInputChange}
+                  className="w-full bg-gray-100 dark:bg-[#2a233a] border border-gray-300 dark:border-gray-600 rounded-md py-2 px-3 text-gray-900 dark:text-white focus:ring-purple-500 focus:border-purple-500"
+                  disabled={!regionalTiers || regionalTiers.length === 0}
+                >
+                  {regionalTiers && regionalTiers.map(tier => (
+                    <option key={tier.rank} value={tier.goal}>
+                      {tier.goal.toLocaleString()} ({tier.hoursRequired} hrs)
+                    </option>
+                  ))}
+                </select>
               </div>
                <div>
                 <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Max Pathways to Goal</label>
                 <input 
                   type="number" 
                   name="maxPathways" 
-                  value={user.maxPathways || ''} 
+                  value={user.maxPathways === undefined ? '' : user.maxPathways} 
                   onChange={handleInputChange} 
+                  min="0"
                   className={`w-full bg-gray-100 dark:bg-[#2a233a] border rounded-md py-2 px-3 text-gray-900 dark:text-white focus:ring-purple-500 ${maxPathwaysError ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'}`}
                   placeholder="e.g., 10 (max 20)"
                 />
@@ -438,16 +538,30 @@ const SettingsPage: React.FC = () => {
              <h2 className="text-xl font-semibold mb-4">Goal Progress</h2>
              <div className="space-y-2">
                 <p className="font-bold text-lg">{goalProgress.statusMessage}</p>
-                {user.monthlyBeanGoal > 0 && goalProgress.remainingGoal > 0 && (
+                {user.monthlyBeanGoal > 0 && ( // Display progress if goal is set
                     <>
-                        <p>Remaining Goal: {goalProgress.remainingGoal.toLocaleString()} beans</p>
+                        {goalProgress.remainingGoal > 0 && <p>Remaining Goal: {goalProgress.remainingGoal.toLocaleString()} beans</p>}
                         <p>Days Left This Month: {goalProgress.remainingDays}</p>
+                        <p>Hours Left To Goal: {goalProgress.hoursLeftToGoal.toLocaleString()}</p>
                     </>
                 )}
              </div>
           </div>
         </div>
       </div>
+      <div className="flex justify-center mt-8 w-full max-w-lg">
+        <button
+          onClick={handleSaveSettings}
+          className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold py-3 px-6 rounded-lg shadow-lg hover:from-purple-700 hover:to-indigo-700 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-900 focus:ring-indigo-500"
+        >
+          Save All Changes
+        </button>
+      </div>
+      {saveMessage && (
+        <div className="fixed bottom-8 right-8 bg-green-500 text-white py-3 px-6 rounded-lg shadow-xl animate-fade-in-out z-50">
+          {saveMessage}
+        </div>
+      )}
     </div>
   );
 };

@@ -19,9 +19,9 @@ const defaultInitialUser: UserProfile = {
   timeFormat: 'standard',
   timeZone: 'America/Los_Angeles',
   maxPathways: 10,
-  currentHours: 0,
-  currentForeignBeanCount: 0,
-  preferredDates: new Set<string>(), // Initialize new preferredDates
+  currentHours: 0, // Re-added
+  currentForeignBeanCount: 0, // Re-added
+  preferredDates: new Set<string>(), // Re-added
 };
 
 const initialEvents: Event[] = [];
@@ -78,8 +78,8 @@ interface AppContextType {
   setAdminUploadState: React.Dispatch<React.SetStateAction<AdminUploadState>>;
   uploadHistory: UploadHistoryItem[];
   setUploadHistory: React.Dispatch<React.SetStateAction<UploadHistoryItem[]>>;
-  regionalTiers: RegionalTier[] | null;
-  setRegionalTiers: React.Dispatch<React.SetStateAction<RegionalTier[] | null>>;
+  regionalTiers: RegionalTier[] | null; // Re-added
+  setRegionalTiers: React.Dispatch<React.SetStateAction<RegionalTier[] | null>>; // Re-added
   theme: 'light' | 'dark';
   setTheme: React.Dispatch<React.SetStateAction<'light' | 'dark'>>;
 }
@@ -105,7 +105,7 @@ const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [adminUploadState, setAdminUploadState] = useState<AdminUploadState>(initialAdminUploadState);
   const [uploadHistory, setUploadHistory] = useState<UploadHistoryItem[]>([]);
-  const [regionalTiers, setRegionalTiers] = useState<RegionalTier[] | null>(defaultRegionalTiers);
+  const [regionalTiers, setRegionalTiers] = useState<RegionalTier[] | null>(defaultRegionalTiers); // Re-added
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
 
   useEffect(() => {
@@ -143,8 +143,8 @@ const App: React.FC = () => {
     setAdminUploadState,
     uploadHistory,
     setUploadHistory,
-    regionalTiers,
-    setRegionalTiers,
+    regionalTiers, // Re-added
+    setRegionalTiers, // Re-added
     theme,
     setTheme,
   };
@@ -161,7 +161,7 @@ const App: React.FC = () => {
               <Route path="/login" element={!isAuthenticated ? <LoginPage /> : <Navigate to={defaultAuthenticatedRoute} replace />} />
               <Route path="/settings" element={<ProtectedRoute element={<SettingsPage />} />} />
               <Route path="/admin-upload" element={<ProtectedRoute element={<AdminUploadPage />} />} />
-              <Route path="/admin-tools" element={<ProtectedRoute element={<AdminToolsPage />} />} />
+              <Route path="/admin-tools" element={<ProtectedRoute element={<AdminToolsPage />} />} /> {/* Re-added */}
               <Route path="/" element={<Navigate to={isAuthenticated ? defaultAuthenticatedRoute : "/login"} replace />} />
             </Routes>
           </main>

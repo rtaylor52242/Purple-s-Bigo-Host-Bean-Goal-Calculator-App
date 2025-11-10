@@ -6,8 +6,8 @@ import { formatTime } from '../utils/time';
 const SettingsPage: React.FC = () => {
   const { user, setUser, events, regionalTiers } = useAppContext();
   const [maxPathwaysError, setMaxPathwaysError] = useState('');
-  const [isBigoIdLocked, setIsBigoIdLocked] = useState(true);
-  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [isBigoIdLocked, setIsBigoIdLocked] = useState(true); // Re-added
+  const [saveMessage, setSaveMessage] = useState<string | null>(null); // Re-added
 
   useEffect(() => {
     // FIX: Corrected typo from `regionalTers` to `regionalTiers`.
@@ -222,12 +222,9 @@ const SettingsPage: React.FC = () => {
     if (monthlyBeanGoal <= 0) return { dailyBeansNeeded: 0, remainingGoal: 0, remainingDays: 0, statusMessage: 'Set a monthly goal to see your progress.' };
 
     const remainingGoal = Math.max(0, monthlyBeanGoal - currentBeanCount);
-    const today = new Date();
-    const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
     
-    // Add 1 to include the current day in remaining days calculation
-    const remainingDaysForCalc = Math.max(1, lastDayOfMonth.getDate() - today.getDate() + 1); 
-    const remainingDaysForDisplay = lastDayOfMonth.getDate() - today.getDate();
+    const remainingDaysForCalc = Math.max(1, remainingDaysInMonth); // Use remainingDaysInMonth
+    const remainingDaysForDisplay = remainingDaysInMonth; // Fix: Directly use the calculated remainingDaysInMonth for display
 
     const daysToStream = remainingDaysForCalc;
 

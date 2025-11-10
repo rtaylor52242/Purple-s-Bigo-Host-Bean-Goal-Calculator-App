@@ -1,14 +1,15 @@
-
 import React, { useState, createContext, useContext, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { UserProfile, Event, AdminUploadState, UploadHistoryItem, SlotPreference } from './types';
+import { UserProfile, Event, AdminUploadState, UploadHistoryItem, SlotPreference, RegionalTier } from './types';
 import Header from './components/Header';
 import SettingsPage from './pages/SettingsPage';
 import AdminUploadPage from './pages/AdminUploadPage';
+import AdminToolsPage from './pages/AdminToolsPage'; // Re-added
 import LoginPage from './pages/LoginPage';
+import { defaultRegionalTiers } from '../data/defaultTiers'; // Re-added
 
-// Mock Data
-const initialUser: UserProfile = {
+// Mock Data - used as a fallback if no saved data, or to fill missing fields
+const defaultInitialUser: UserProfile = {
   bigoUserId: 'Bigo-Host1',
   phoneNumber: '+15551234567',
   enableSms: true,
@@ -18,6 +19,9 @@ const initialUser: UserProfile = {
   timeFormat: 'standard',
   timeZone: 'America/Los_Angeles',
   maxPathways: 10,
+  currentHours: 0, // Re-added
+  currentForeignBeanCount: 0, // Re-added
+  preferredDates: new Set<string>(), // Re-added
 };
 
 const initialEvents: Event[] = [];
@@ -30,6 +34,61 @@ export const initialAdminUploadState: AdminUploadState = {
   ocrResult: null,
   processedEvent: null,
   selectedOcrSlots: new Set<string>(),
+};
+
+// Function to load user profile from localStorage
+const loadUserProfileFromLocalStorage = (): UserProfile => {
+  try {
+    const savedUser = localStorage.getItem('purpleAppUserProfile');
+    if (savedUser) {
+      const parsedUser: UserProfile = JSON.parse(savedUser);
+      // Reconstruct Map from array
+      if (parsedUser.preferredSlots && Array.isArray(parsedUser.preferredSlots)) {
+        parsedUser.preferredSlots = new Map(parsedUser.preferredSlots as unknown as Iterable<readonly [string, SlotPreference]>);
+      } else {
+        parsedUser.preferredSlots = new Map();
+      }
+      // Reconstruct Set from array for preferredDates
+      if (parsedUser.preferredDates && Array.isArray(parsedUser.preferredDates)) {
+        parsedUser.preferredDates = new Set(parsedUser.preferredDates);
+      } else {
+        parsedUser.preferredDates = new Set();
+      }
+      
+      const mergedUser = { ...defaultInitialUser, ...parsedUser };
+
+      // Ensure monthlyBeanGoal is valid and set to a default if not
+      if (defaultRegionalTiers && defaultRegionalTiers.length > 0) {
+        // Find the highest goal to use as a fallback default
+        const highestGoal = defaultRegionalTiers[0].goal; 
+        const isValidGoal = defaultRegionalTiers.some(tier => tier.goal === mergedUser.monthlyBeanGoal);
+
+        if (mergedUser.monthlyBeanGoal <= 0 || !isValidGoal) {
+          console.warn("Invalid or missing monthlyBeanGoal in localStorage. Resetting to highest tier goal:", highestGoal);
+          mergedUser.monthlyBeanGoal = highestGoal;
+        }
+      } else {
+        console.warn("defaultRegionalTiers not available during load. monthlyBeanGoal not validated.");
+      }
+
+      return mergedUser;
+    }
+  } catch (error) {
+    console.error("Failed to load user profile from localStorage:", error);
+    // Clear corrupted data if parsing fails
+    localStorage.removeItem('purpleAppUserProfile');
+  }
+  
+  // Ensure defaultInitialUser's monthlyBeanGoal is also valid if tiers are present
+  const initialUserWithValidGoal = { ...defaultInitialUser };
+  if (defaultRegionalTiers && defaultRegionalTiers.length > 0) {
+    const highestGoal = defaultRegionalTiers[0].goal;
+    const isValidDefaultGoal = defaultRegionalTiers.some(tier => tier.goal === initialUserWithValidGoal.monthlyBeanGoal);
+    if (initialUserWithValidGoal.monthlyBeanGoal <= 0 || !isValidDefaultGoal) {
+      initialUserWithValidGoal.monthlyBeanGoal = highestGoal;
+    }
+  }
+  return initialUserWithValidGoal;
 };
 
 
@@ -45,6 +104,8 @@ interface AppContextType {
   setAdminUploadState: React.Dispatch<React.SetStateAction<AdminUploadState>>;
   uploadHistory: UploadHistoryItem[];
   setUploadHistory: React.Dispatch<React.SetStateAction<UploadHistoryItem[]>>;
+  regionalTiers: RegionalTier[] | null; // Re-added
+  setRegionalTiers: React.Dispatch<React.SetStateAction<RegionalTier[] | null>>; // Re-added
   theme: 'light' | 'dark';
   setTheme: React.Dispatch<React.SetStateAction<'light' | 'dark'>>;
 }
@@ -65,11 +126,12 @@ const ProtectedRoute: React.FC<{ element: React.ReactElement }> = ({ element }) 
 
 
 const App: React.FC = () => {
-  const [user, setUser] = useState<UserProfile>(initialUser);
+  const [user, setUser] = useState<UserProfile>(loadUserProfileFromLocalStorage());
   const [events, setEvents] = useState<Event[]>(initialEvents);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [adminUploadState, setAdminUploadState] = useState<AdminUploadState>(initialAdminUploadState);
   const [uploadHistory, setUploadHistory] = useState<UploadHistoryItem[]>([]);
+  const [regionalTiers, setRegionalTiers] = useState<RegionalTier[] | null>(defaultRegionalTiers); // Re-added
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
 
   useEffect(() => {
@@ -79,6 +141,21 @@ const App: React.FC = () => {
       document.documentElement.classList.remove('dark');
     }
   }, [theme]);
+
+  // Auto-save user profile to localStorage whenever the user state changes
+  useEffect(() => {
+    try {
+      // Convert Map to array for JSON serialization
+      const userToSave = {
+        ...user,
+        preferredSlots: Array.from(user.preferredSlots.entries()),
+        preferredDates: user.preferredDates ? Array.from(user.preferredDates) : [], // Convert Set to Array
+      };
+      localStorage.setItem('purpleAppUserProfile', JSON.stringify(userToSave));
+    } catch (error) {
+      console.error("Failed to auto-save user profile to localStorage:", error);
+    }
+  }, [user]);
 
 
   const contextValue: AppContextType = {
@@ -92,10 +169,12 @@ const App: React.FC = () => {
     setAdminUploadState,
     uploadHistory,
     setUploadHistory,
+    regionalTiers, // Re-added
+    setRegionalTiers, // Re-added
     theme,
     setTheme,
   };
-
+  
   const defaultAuthenticatedRoute = events.length > 0 ? "/settings" : "/admin-upload";
 
   return (
@@ -108,6 +187,7 @@ const App: React.FC = () => {
               <Route path="/login" element={!isAuthenticated ? <LoginPage /> : <Navigate to={defaultAuthenticatedRoute} replace />} />
               <Route path="/settings" element={<ProtectedRoute element={<SettingsPage />} />} />
               <Route path="/admin-upload" element={<ProtectedRoute element={<AdminUploadPage />} />} />
+              <Route path="/admin-tools" element={<ProtectedRoute element={<AdminToolsPage />} />} /> {/* Re-added */}
               <Route path="/" element={<Navigate to={isAuthenticated ? defaultAuthenticatedRoute : "/login"} replace />} />
             </Routes>
           </main>
