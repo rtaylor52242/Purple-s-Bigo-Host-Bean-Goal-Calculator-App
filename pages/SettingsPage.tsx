@@ -23,6 +23,7 @@ const SettingsPage: React.FC = () => {
   const [recommendationError, setRecommendationError] = useState<string | null>(null);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
+  const [timeZoneSearch, setTimeZoneSearch] = useState('');
 
 
   useEffect(() => {
@@ -59,6 +60,17 @@ const SettingsPage: React.FC = () => {
         ];
     }
   }, []);
+  
+  const filteredTimeZoneOptions = useMemo(() => {
+    if (!timeZoneSearch) {
+      return timeZoneOptions;
+    }
+    const lowercasedSearch = timeZoneSearch.toLowerCase();
+    return timeZoneOptions.filter(tz =>
+      tz.label.toLowerCase().includes(lowercasedSearch)
+    );
+  }, [timeZoneOptions, timeZoneSearch]);
+
 
   const slotDetailsMap = useMemo(() => {
     const map = new Map<string, { event: Event, slot: EventSlot }>();
@@ -439,8 +451,10 @@ const SettingsPage: React.FC = () => {
     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
   );
 
-  const TimeZoneIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400 dark:text-gray-500" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.414-1.415L11 9.586V6z" clipRule="evenodd" /></svg>
+  const SearchIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400 dark:text-gray-500" viewBox="0 0 20 20" fill="currentColor">
+      <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
+    </svg>
   );
 
   const LockClosedIcon = () => (
@@ -516,20 +530,33 @@ const SettingsPage: React.FC = () => {
                   <input type="tel" name="phoneNumber" value={user.phoneNumber} onChange={handleInputChange} className="pl-10 w-full bg-gray-100 dark:bg-[#2a233a] border border-gray-300 dark:border-gray-600 rounded-md py-2 px-3 text-gray-900 dark:text-white focus:ring-purple-500 focus:border-purple-500" placeholder="+1234567890" />
                  </div>
               </div>
-              <div className="md:col-span-2">
-                 <label htmlFor="timeZone" className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Your Local Time Zone</label>
-                  <div className="relative">
-                    <span className="absolute inset-y-0 left-0 flex items-center pl-3"><TimeZoneIcon/></span>
-                    <select
-                      id="timeZone"
-                      name="timeZone"
-                      value={user.timeZone}
-                      onChange={handleInputChange}
-                      className="pl-10 block w-full bg-gray-100 dark:bg-[#2a233a] border border-gray-300 dark:border-gray-600 rounded-md py-2 px-3 text-gray-900 dark:text-white focus:ring-purple-500 focus:border-purple-500"
-                    >
-                      {timeZoneOptions.map(tz => <option key={tz.value} value={tz.value}>{tz.label}</option>)}
-                    </select>
-                  </div>
+              <div className="md:col-span-2 space-y-2">
+                <label htmlFor="timeZoneSearch" className="block text-sm font-medium text-gray-600 dark:text-gray-400">Your Local Time Zone</label>
+                <div className="relative">
+                    <span className="absolute inset-y-0 left-0 flex items-center pl-3"><SearchIcon /></span>
+                    <input
+                        id="timeZoneSearch"
+                        type="text"
+                        placeholder="Search time zones..."
+                        value={timeZoneSearch}
+                        onChange={(e) => setTimeZoneSearch(e.target.value)}
+                        className="pl-10 w-full bg-gray-100 dark:bg-[#2a233a] border border-gray-300 dark:border-gray-600 rounded-md py-2 px-3 text-gray-900 dark:text-white focus:ring-purple-500 focus:border-purple-500"
+                    />
+                </div>
+                <select
+                    id="timeZone"
+                    name="timeZone"
+                    value={user.timeZone}
+                    onChange={handleInputChange}
+                    className="block w-full bg-gray-100 dark:bg-[#2a233a] border border-gray-300 dark:border-gray-600 rounded-md py-2 px-3 text-gray-900 dark:text-white focus:ring-purple-500 focus:border-purple-500"
+                    size={5}
+                >
+                    {filteredTimeZoneOptions.length > 0 ? (
+                        filteredTimeZoneOptions.map(tz => <option key={tz.value} value={tz.value}>{tz.label}</option>)
+                    ) : (
+                        <option disabled>No matching time zones found.</option>
+                    )}
+                </select>
               </div>
             </div>
             <div className="mt-6 space-y-3">
