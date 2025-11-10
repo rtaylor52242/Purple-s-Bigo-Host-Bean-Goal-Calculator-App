@@ -1,8 +1,12 @@
+
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '../App';
-import { UserProfile, Event, EventSlot, SlotPreference } from '../types';
+import { UserProfile, Event, EventSlot, SlotPreference, RecommendationHistoryItem } from '../types';
 import { formatTime } from '../utils/time';
 import { formatSelectedDatesForDisplay } from '../utils/date';
+import { generateGoalPathways } from '../services/geminiService';
+
 
 const SettingsPage: React.FC = () => {
   const { user, setUser, events, regionalTiers } = useAppContext();
@@ -12,6 +16,13 @@ const SettingsPage: React.FC = () => {
   const [selectedSort, setSelectedSort] = useState<{ key: 'name' | 'time' | 'duration', direction: 'asc' | 'desc' }>({ key: 'name', direction: 'asc' });
   const [availableSort, setAvailableSort] = useState<{ key: 'name' | 'time' | 'duration', direction: 'asc' | 'desc' }>({ key: 'time', direction: 'asc' });
   const [isDatesModalOpen, setIsDatesModalOpen] = useState(false);
+
+  // New state for recommendation feature
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [recommendationReport, setRecommendationReport] = useState<string | null>(null);
+  const [recommendationError, setRecommendationError] = useState<string | null>(null);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
 
 
   useEffect(() => {
@@ -225,6 +236,99 @@ const SettingsPage: React.FC = () => {
       setSaveMessage(null);
     }, 3000);
   };
+  
+  const handleProcessRecommendations = async () => {
+    setIsGenerating(true);
+    setRecommendationError(null);
+    setRecommendationReport(null);
+
+    try {
+        const totalBeansFromSelected = sortedSelectedSlots.reduce((sum, slot) => {
+            const tier = slot.details?.event.rewardTiers[slot.pref.rewardTierIndex];
+            return sum + (tier ? tier.beans : 0);
+        }, 0);
+
+        const dataForApi = {
+            monthlyBeanGoal: user.monthlyBeanGoal,
+            currentBeanCount: user.currentBeanCount,
+            remainingDays: remainingDaysInMonth,
+            maxPathways: user.maxPathways,
+            // FIX: Explicitly cast the array from the Set to string[] to resolve type inference issue.
+            preferredDates: user.preferredDates ? Array.from(user.preferredDates) as string[] : [],
+            selectedSlots: sortedSelectedSlots.map(s => ({
+                name: s.details?.event.name || 'Unknown Event',
+                beans: s.details?.event.rewardTiers[s.pref.rewardTierIndex]?.beans || 0
+            })),
+            availableSlots: sortedAvailableSlots.map(s => ({
+                name: s.event.name,
+                time: s.slot.time,
+                duration: s.slot.duration,
+                beans: s.event.rewardTiers[s.event.rewardTiers.length - 1]?.beans || 0, // Assume max tier for available
+            })),
+            totalBeansFromSelected: totalBeansFromSelected,
+        };
+
+        const report = await generateGoalPathways(dataForApi);
+        setRecommendationReport(report);
+        setIsReportModalOpen(true);
+        
+        const newHistoryItem: RecommendationHistoryItem = {
+            id: new Date().toISOString(),
+            date: new Date().toISOString(),
+            report: report,
+        };
+
+        setUser(prevUser => ({
+            ...prevUser,
+            recommendationHistory: [newHistoryItem, ...(prevUser.recommendationHistory || [])].slice(0, 10)
+        }));
+
+    } catch (err: any) {
+        setRecommendationError(err.message || "An unknown error occurred while generating recommendations.");
+        setIsReportModalOpen(true); // Open modal to show the error
+    } finally {
+        setIsGenerating(false);
+    }
+  };
+
+  const handleDeleteRecommendation = (idToDelete: string) => {
+    if (window.confirm("Are you sure you want to delete this report from your history? This action cannot be undone.")) {
+        setUser(prevUser => ({
+            ...prevUser,
+            recommendationHistory: prevUser.recommendationHistory?.filter(item => item.id !== idToDelete) || [],
+        }));
+    }
+  };
+  
+    const handlePrintReport = () => {
+        const modalContent = document.getElementById('report-modal-content');
+        if (modalContent) {
+            const printWindow = window.open('', '', 'height=600,width=800');
+            if (printWindow) {
+                printWindow.document.write('<html><head><title>Goal Pathways Report</title>');
+                printWindow.document.write('<style>body { font-family: sans-serif; white-space: pre-wrap; } h1, h2, h3 { color: #333; } ul { list-style-type: disc; padding-left: 20px; } code { background: #f4f4f4; padding: 2px 4px; border-radius: 4px; }</style>');
+                printWindow.document.write('</head><body>');
+                printWindow.document.write(modalContent.innerHTML);
+                printWindow.document.write('</body></html>');
+                printWindow.document.close();
+                printWindow.print();
+            }
+        }
+    };
+
+    const handleCopyReport = () => {
+        if (recommendationReport) {
+            navigator.clipboard.writeText(recommendationReport)
+                .then(() => {
+                    alert("Report copied to clipboard!");
+                })
+                .catch(err => {
+                    console.error("Failed to copy report: ", err);
+                    alert("Failed to copy report.");
+                });
+        }
+    };
+
 
   const goalProgress = useMemo(() => {
     const { monthlyBeanGoal, currentBeanCount } = user;
@@ -363,6 +467,12 @@ const SettingsPage: React.FC = () => {
     </svg>
   );
 
+  const TrashIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+    </svg>
+  );
+
   return (
     <div className="space-y-8">
       <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Your Settings</h1>
@@ -458,8 +568,20 @@ const SettingsPage: React.FC = () => {
                         const { event, slot } = details;
                         const selectedTier = pref.rewardTierIndex < event.rewardTiers.length ? event.rewardTiers[pref.rewardTierIndex] : null;
                         const beans = selectedTier ? selectedTier.beans : 0;
+                        
+                        const dateMatch = event.name.match(/\((\d{2}\/\d{2}\/\d{4})\)/);
+                        let isPreferred = false;
+                        if (dateMatch?.[1] && user.preferredDates) {
+                            const [month, day, year] = dateMatch[1].split('/');
+                            const eventDate = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day)));
+                            const eventIsoDate = eventDate.toISOString().split('T')[0];
+                            if (user.preferredDates.has(eventIsoDate)) {
+                                isPreferred = true;
+                            }
+                        }
+
                         return (
-                            <div key={identifier} className="flex items-center justify-between p-2 bg-gray-100 dark:bg-[#2a233a] rounded-md">
+                            <div key={identifier} className={`flex items-center justify-between p-2 bg-gray-100 dark:bg-[#2a233a] rounded-md ${isPreferred ? 'ring-2 ring-green-500' : ''}`}>
                                 <div>
                                     <p className="text-sm">
                                         <span className="font-semibold text-purple-600 dark:text-purple-300">{event.name}</span>
@@ -517,9 +639,20 @@ const SettingsPage: React.FC = () => {
                     const isUpDisabled = tierIndex >= tiers.length - 1;
                     const isDownDisabled = tierIndex <= 0;
 
+                    const dateMatch = event.name.match(/\((\d{2}\/\d{2}\/\d{4})\)/);
+                    let isPreferred = false;
+                    if (dateMatch?.[1] && user.preferredDates) {
+                        const [month, day, year] = dateMatch[1].split('/');
+                        const eventDate = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day)));
+                        const eventIsoDate = eventDate.toISOString().split('T')[0];
+                        if (user.preferredDates.has(eventIsoDate)) {
+                            isPreferred = true;
+                        }
+                    }
+
                     return (
                         <div key={slotIdentifier} className="relative group">
-                            <div className="flex items-center justify-between p-3 bg-gray-100 dark:bg-[#2a233a] rounded-md hover:bg-purple-50 dark:hover:bg-purple-900/50 transition-colors">
+                            <div className={`flex items-center justify-between p-3 bg-gray-100 dark:bg-[#2a233a] rounded-md hover:bg-purple-50 dark:hover:bg-purple-900/50 transition-colors ${isPreferred ? 'ring-2 ring-green-500' : ''}`}>
                                 <div className="flex items-center">
                                     <input type="checkbox" checked={isSelected} onChange={() => handleSlotToggle(slotIdentifier)} className="h-4 w-4 rounded bg-gray-200 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-purple-600 focus:ring-purple-500" />
                                     <span className="ml-3 text-gray-700 dark:text-gray-300 text-sm">
@@ -625,13 +758,72 @@ const SettingsPage: React.FC = () => {
           </div>
         </div>
       </div>
-      <div className="flex justify-center mt-8 w-full max-w-lg">
-        <button
-          onClick={handleSaveSettings}
-          className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold py-3 px-6 rounded-lg shadow-lg hover:from-purple-700 hover:to-indigo-700 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-900 focus:ring-indigo-500"
-        >
-          Save All Changes
-        </button>
+       <div className="mt-8 w-full max-w-xl mx-auto space-y-6">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={handleSaveSettings}
+            className="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold py-3 px-6 rounded-lg shadow-lg hover:from-purple-700 hover:to-indigo-700 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-900 focus:ring-indigo-500"
+          >
+            Save All Changes
+          </button>
+          <button
+              onClick={handleProcessRecommendations}
+              disabled={isGenerating}
+              className="flex-1 bg-gradient-to-r from-green-500 to-teal-500 text-white font-bold py-3 px-6 rounded-lg shadow-lg hover:from-green-600 hover:to-teal-600 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-900 focus:ring-teal-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+          {isGenerating && <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>}
+          {isGenerating ? 'Analyzing...' : 'Process Recommendations'}
+          </button>
+        </div>
+
+        <div className="bg-white dark:bg-[#1a1625] p-6 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
+            <button 
+                onClick={() => setIsHistoryExpanded(!isHistoryExpanded)}
+                className="w-full flex justify-between items-center text-left"
+                aria-expanded={isHistoryExpanded}
+            >
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Recommendation History</h2>
+                <svg xmlns="http://www.w3.org/2000/svg" className={`h-6 w-6 transform transition-transform text-gray-500 dark:text-gray-400 ${isHistoryExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+            </button>
+
+            {isHistoryExpanded && (
+                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    {user.recommendationHistory && user.recommendationHistory.length > 0 ? (
+                        <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
+                            {user.recommendationHistory.map((item) => (
+                                <div key={item.id} className="flex items-center justify-between p-3 bg-gray-100 dark:bg-[#2a233a] rounded-md">
+                                    <p className="text-sm text-gray-700 dark:text-gray-300 truncate pr-4">
+                                        Report from {new Date(item.date).toLocaleString()}
+                                    </p>
+                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                        <button
+                                            onClick={() => {
+                                                setRecommendationReport(item.report);
+                                                setIsReportModalOpen(true);
+                                            }}
+                                            className="px-3 py-1 text-xs font-medium text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/50 rounded-md hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors"
+                                        >
+                                            View
+                                        </button>
+                                        <button
+                                            onClick={() => handleDeleteRecommendation(item.id)}
+                                            className="p-1.5 text-xs font-medium text-red-500 dark:text-red-400 bg-red-100 dark:bg-red-900/50 rounded-md hover:bg-red-200 dark:hover:bg-red-800 transition-colors"
+                                            aria-label="Delete recommendation"
+                                        >
+                                            <TrashIcon />
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">No past recommendations found.</p>
+                    )}
+                </div>
+            )}
+        </div>
       </div>
       {saveMessage && (
         <div className="fixed bottom-8 right-8 bg-green-500 text-white py-3 px-6 rounded-lg shadow-xl animate-fade-in-out z-50">
@@ -665,6 +857,57 @@ const SettingsPage: React.FC = () => {
           </div>
         </div>
       )}
+
+        {isReportModalOpen && (
+            <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4" onClick={() => setIsReportModalOpen(false)}>
+                <div className="bg-white dark:bg-[#1a1625] rounded-lg shadow-xl w-full max-w-3xl p-6 flex flex-col" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex justify-between items-center mb-4 border-b border-gray-200 dark:border-gray-700 pb-3">
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Goal Achievement Pathways</h3>
+                        <button
+                            onClick={() => setIsReportModalOpen(false)}
+                            className="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none"
+                            aria-label="Close report"
+                        >
+                            &times;
+                        </button>
+                    </div>
+                    <div id="report-modal-content" className="flex-grow max-h-[70vh] overflow-y-auto pr-4 text-gray-800 dark:text-gray-200">
+                        {recommendationError ? (
+                            <div className="text-red-500 dark:text-red-400">
+                                <h4 className="font-bold">Error</h4>
+                                <p>{recommendationError}</p>
+                            </div>
+                        ) : recommendationReport ? (
+                            <pre className="whitespace-pre-wrap font-sans">{recommendationReport}</pre>
+                        ) : (
+                            <p>No report generated.</p>
+                        )}
+                    </div>
+                    <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+                         <button
+                            onClick={handleCopyReport}
+                            disabled={!recommendationReport}
+                            className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-400 disabled:opacity-50"
+                        >
+                            Copy Text
+                        </button>
+                        <button
+                            onClick={handlePrintReport}
+                            disabled={!recommendationReport}
+                            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                        >
+                            Print
+                        </button>
+                        <button
+                            onClick={() => setIsReportModalOpen(false)}
+                            className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        >
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
     </div>
   );
 };

@@ -28,6 +28,12 @@ export interface UploadHistoryItem {
   ocrResult: OcrResult | null;
 }
 
+export interface RecommendationHistoryItem {
+  id: string;
+  date: string;
+  report: string;
+}
+
 export interface UserProfile {
   bigoUserId: string;
   phoneNumber: string;
@@ -42,6 +48,7 @@ export interface UserProfile {
   currentHours?: number;
   currentForeignBeanCount?: number;
   preferredDates?: Set<string>; // New: Stores selected dates from the calendar as ISO strings
+  recommendationHistory?: RecommendationHistoryItem[];
 }
 
 export interface EventSlot {

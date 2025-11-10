@@ -22,6 +22,7 @@ const defaultInitialUser: UserProfile = {
   currentHours: 0, // Re-added
   currentForeignBeanCount: 0, // Re-added
   preferredDates: new Set<string>(), // Re-added
+  recommendationHistory: [],
 };
 
 const initialEvents: Event[] = [];

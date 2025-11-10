@@ -177,3 +177,78 @@ export async function extractRegionalTiersFromImage(base64Image: string): Promis
     throw new Error("Failed to extract tier details from the image.");
   }
 }
+
+
+export async function generateGoalPathways(data: {
+  monthlyBeanGoal: number;
+  currentBeanCount: number;
+  remainingDays: number;
+  maxPathways?: number;
+  preferredDates: string[];
+  selectedSlots: { name: string; beans: number; }[];
+  availableSlots: { name: string; time: string; duration: number; beans: number; }[];
+  totalBeansFromSelected: number;
+}): Promise<string> {
+  const beansStillNeeded = data.monthlyBeanGoal - data.currentBeanCount;
+
+  const prompt = `
+You are an expert strategic advisor for Bigo Live hosts. Your task is to analyze the user's current situation and recommend several distinct pathways to achieve their monthly bean goal.
+
+**User's Current Situation:**
+- Monthly Bean Goal: ${data.monthlyBeanGoal.toLocaleString()} beans
+- Current Bean Count: ${data.currentBeanCount.toLocaleString()} beans
+- **Total Beans Still Needed:** ${beansStillNeeded.toLocaleString()} beans
+- Days Remaining this Month: ${data.remainingDays}
+- Maximum number of pathways to suggest: ${data.maxPathways || 6}
+- User's Preferred Streaming Dates: [${data.preferredDates.join(', ') || 'None specified'}]
+
+**Events Already Selected by the User (These are fixed and must be included in calculations):**
+${data.selectedSlots.length > 0 ? data.selectedSlots.map(s => `- ${s.name}: ${s.beans.toLocaleString()} beans`).join('\n') : '- None'}
+Total beans from selected events: ${data.totalBeansFromSelected.toLocaleString()} beans
+
+**Available Event Slots the User Can Still Choose From:**
+${data.availableSlots.map(s => `- ${s.name} at ${s.time} for ${s.duration}m: ${s.beans.toLocaleString()} beans`).join('\n')}
+
+**Your Task:**
+
+Generate a comprehensive report in Markdown format. The report must include the following sections. All titles and headings MUST be bold.
+
+1.  **Executive Summary:** Briefly summarize the user's goal, their current progress, and the total beans they still need to acquire after accounting for their already selected events. Explain the different strategies you will outline.
+
+2.  **Recommended Pathways:**
+    Based on the available slots, generate up to ${data.maxPathways || 6} distinct, sequential plans to meet or exceed the remaining bean goal. For each pathway, provide a clear, **bold** title.
+
+    Generate a pathway for each of the following strategies:
+    a. **The "Fastest Hours" Pathway:** Achieve the goal using the combination of events that requires the minimum total streaming time.
+    b. **The "Time-Efficient" Pathway:** Achieve the goal using the fewest number of days, prioritizing packing more events into fewer days if possible.
+    c. **The "Minimalist" Pathway:** Achieve the goal by selecting the fewest number of additional events.
+    d. **The "Bean Maximizer" Pathway:** Achieve the goal by selecting events with the highest bean-per-minute ratio first. This is about efficiency.
+    e. **The "Preferred Days" Pathway:** Achieve the goal while prioritizing events that fall on the user's preferred dates. Only use non-preferred dates if absolutely necessary.
+    f. **The "Consistent Streamer" Pathway:** Achieve the goal by selecting events that spread the work out, aiming for a consistent daily stream time of around 2 hours, if possible.
+
+    **Important Formatting for Pathways:**
+    - For each pathway, list the specific events to select (Name, Time, Duration, Beans).
+    - Conclude each pathway with a summary: Total additional beans, total additional hours, and total additional days required.
+
+3.  **Best Pathway Summary:**
+    After generating the pathways, add a final section with the bold title: **Best Pathway Summary**. In this section, analyze your own recommendations. For each of the 6 strategies you were asked to generate (Fastest Hours, Time-Efficient, etc.), explicitly state which of your generated pathways is the best fit and provide a one-sentence justification.
+
+**Constraint Checklist & Final Analysis:**
+- Ensure all calculations are accurate.
+- All pathways must meet or slightly exceed the required bean goal.
+- The tone should be encouraging and strategic.
+- Structure your response clearly with Markdown headings, lists, and bold text for readability.
+- Do not invent events; only use the ones from the "Available Event Slots" list.
+`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-pro", // Using a more powerful model for complex reasoning
+      contents: prompt,
+    });
+    return response.text;
+  } catch (error) {
+    console.error("Error calling Gemini API for goal pathways:", error);
+    throw new Error("Failed to generate goal recommendations.");
+  }
+}
