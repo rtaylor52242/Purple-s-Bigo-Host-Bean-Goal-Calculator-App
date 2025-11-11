@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useMemo } from 'react';
 import { extractEventDetailsFromImage } from '../services/geminiService';
 import { Event, UploadHistoryItem, OcrResult, EventSlot } from '../types';
@@ -380,7 +381,10 @@ const AdminUploadPage: React.FC = () => {
                                             {item.dateTimeSlots.map((slot, index) => (
                                                 <label key={slot.id} className="flex items-center p-2 bg-white dark:bg-[#1a1625] rounded-md hover:bg-purple-50 dark:hover:bg-purple-900/50 cursor-pointer">
                                                     <input type="checkbox" checked={item.selectedOcrSlots.has(slot.id)} onChange={() => handleOcrSlotToggle(item.id, slot.id)} className="h-4 w-4 rounded bg-gray-200 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-purple-600 focus:ring-purple-500" />
-                                                    <span className="ml-3 text-gray-700 dark:text-gray-300">{`${slot.date.getUTCMonth() + 1}/${slot.date.getUTCDate()}`} - {formatTime(slot.time, user.timeFormat)} PST - {slot.duration}m</span>
+                                                    <span className="ml-3 text-gray-700 dark:text-gray-300 flex items-baseline">
+                                                        <span className="font-semibold text-gray-500 dark:text-gray-400 mr-2 w-6 text-right">{index + 1}.</span>
+                                                        <span>{`${slot.date.getUTCMonth() + 1}/${slot.date.getUTCDate()}`} - {formatTime(slot.time, user.timeFormat)} PST - {slot.duration}m</span>
+                                                    </span>
                                                 </label>
                                             ))}
                                         </div>

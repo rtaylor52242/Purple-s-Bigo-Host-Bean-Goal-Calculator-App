@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '../App';
 import { UserProfile, Event, EventSlot, SlotPreference, RecommendationHistoryItem } from '../types';
@@ -14,7 +15,7 @@ const SettingsPage: React.FC = () => {
   const [isBigoIdLocked, setIsBigoIdLocked] = useState(true);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [selectedSort, setSelectedSort] = useState<{ key: 'name' | 'time' | 'duration', direction: 'asc' | 'desc' }>({ key: 'name', direction: 'asc' });
-  const [availableSort, setAvailableSort] = useState<{ key: 'name' | 'time' | 'duration', direction: 'asc' | 'desc' }>({ key: 'time', direction: 'asc' });
+  const [availableSort, setAvailableSort] = useState<{ key: 'name' | 'time' | 'duration' | 'preferred' | 'beans', direction: 'asc' | 'desc' }>({ key: 'time', direction: 'asc' });
   const [isDatesModalOpen, setIsDatesModalOpen] = useState(false);
 
   // New state for recommendation feature
@@ -119,14 +120,14 @@ const SettingsPage: React.FC = () => {
   
   const handleSortChange = (
     list: 'selected' | 'available',
-    newKey: 'name' | 'time' | 'duration'
+    newKey: 'name' | 'time' | 'duration' | 'preferred' | 'beans'
   ) => {
-    const setSort = list === 'selected' ? setSelectedSort : setAvailableSort;
+    const setSort = list === 'selected' ? setSelectedSort : setAvailableSort as React.Dispatch<React.SetStateAction<{ key: 'name' | 'time' | 'duration' | 'preferred' | 'beans', direction: 'asc' | 'desc' }>>;
     setSort(prevSort => {
       if (prevSort.key === newKey) {
         return { ...prevSort, direction: prevSort.direction === 'asc' ? 'desc' : 'asc' };
       }
-      return { key: newKey, direction: 'asc' };
+      return { key: newKey, direction: newKey === 'beans' ? 'desc' : 'asc' };
     });
   };
 
@@ -239,6 +240,38 @@ const SettingsPage: React.FC = () => {
             newPreferredSlots.set(key, { ...pref, isSelected: false });
         });
         return {...prevUser, preferredSlots: newPreferredSlots };
+    });
+  };
+
+  const handleSelectPreferred = () => {
+    if (!user.preferredDates || user.preferredDates.size === 0) {
+        alert("You haven't selected any preferred dates. Please go to Admin Tools to select them.");
+        return;
+    }
+
+    setUser(prevUser => {
+        const newPreferredSlots = new Map<string, SlotPreference>(prevUser.preferredSlots);
+        
+        slotDetailsMap.forEach((details, identifier) => {
+            const { event } = details;
+            const dateMatch = event.name.match(/\((\d{2}\/\d{2}\/\d{4})\)/);
+            if (dateMatch?.[1] && prevUser.preferredDates) {
+                const [month, day, year] = dateMatch[1].split('/');
+                const eventDate = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day)));
+                const eventIsoDate = eventDate.toISOString().split('T')[0];
+                
+                if (prevUser.preferredDates.has(eventIsoDate)) {
+                    const currentPref = newPreferredSlots.get(identifier);
+                    const highestTierIndex = event.rewardTiers.length - 1;
+                    newPreferredSlots.set(identifier, {
+                        isSelected: true,
+                        rewardTierIndex: currentPref?.rewardTierIndex ?? highestTierIndex,
+                    });
+                }
+            }
+        });
+
+        return { ...prevUser, preferredSlots: newPreferredSlots };
     });
   };
 
@@ -415,12 +448,34 @@ const SettingsPage: React.FC = () => {
       slots.map(slot => ({ event, slot }))
     );
 
+    const isPreferred = (event: Event) => {
+        if (!user.preferredDates || user.preferredDates.size === 0) return false;
+        const dateMatch = event.name.match(/\((\d{2}\/\d{2}\/\d{4})\)/);
+        if (!dateMatch?.[1]) return false;
+        const [month, day, year] = dateMatch[1].split('/');
+        const eventDate = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day)));
+        const eventIsoDate = eventDate.toISOString().split('T')[0];
+        return user.preferredDates.has(eventIsoDate);
+    };
+
     allSlots.sort((a, b) => {
       const { event: eventA, slot: slotA } = a;
       const { event: eventB, slot: slotB } = b;
 
       let compareResult = 0;
       switch (availableSort.key) {
+        case 'preferred':
+          const preferredA = isPreferred(eventA);
+          const preferredB = isPreferred(eventB);
+          compareResult = (preferredB ? 1 : 0) - (preferredA ? 1 : 0);
+          if (compareResult === 0) compareResult = slotA.time.localeCompare(slotB.time); // secondary sort by time
+          break;
+        case 'beans':
+          const beansA = eventA.rewardTiers[eventA.rewardTiers.length - 1]?.beans || 0;
+          const beansB = eventB.rewardTiers[eventB.rewardTiers.length - 1]?.beans || 0;
+          compareResult = beansA - beansB;
+          if (compareResult === 0) compareResult = eventA.name.localeCompare(eventB.name);
+          break;
         case 'time':
           compareResult = slotA.time.localeCompare(slotB.time);
           if (compareResult === 0) compareResult = eventA.name.localeCompare(eventB.name);
@@ -439,7 +494,7 @@ const SettingsPage: React.FC = () => {
     });
 
     return allSlots;
-  }, [availableSlotsByEvent, availableSort]);
+  }, [availableSlotsByEvent, availableSort, user.preferredDates]);
   
   const formattedPreferredDates = useMemo(() => formatSelectedDatesForDisplay(user.preferredDates || new Set()), [user.preferredDates]);
     
@@ -590,7 +645,7 @@ const SettingsPage: React.FC = () => {
                     </div>
                 </div>
                 <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
-                    {sortedSelectedSlots.map(({ identifier, pref, details }) => {
+                    {sortedSelectedSlots.map(({ identifier, pref, details }, index) => {
                         if (!details) return null;
                         const { event, slot } = details;
                         const selectedTier = pref.rewardTierIndex < event.rewardTiers.length ? event.rewardTiers[pref.rewardTierIndex] : null;
@@ -610,12 +665,15 @@ const SettingsPage: React.FC = () => {
                         return (
                             <div key={identifier} className={`flex items-center justify-between p-2 bg-gray-100 dark:bg-[#2a233a] rounded-md ${isPreferred ? 'ring-2 ring-green-500' : ''}`}>
                                 <div>
-                                    <p className="text-sm">
-                                        <span className="font-semibold text-purple-600 dark:text-purple-300">{event.name}</span>
-                                        <span className="text-gray-500 dark:text-gray-400"> - </span>
-                                        <span className="text-gray-700 dark:text-gray-300">{formatTime(slot.time, user.timeFormat, event, user.timeZone)} for {slot.duration}m</span>
+                                    <p className="text-sm flex items-baseline">
+                                        <span className="font-semibold text-gray-500 dark:text-gray-400 mr-2 w-6 text-right">{index + 1}.</span>
+                                        <span>
+                                            <span className="font-semibold text-purple-600 dark:text-purple-300">{event.name}</span>
+                                            <span className="text-gray-500 dark:text-gray-400"> - </span>
+                                            <span className="text-gray-700 dark:text-gray-300">{formatTime(slot.time, user.timeFormat, event, user.timeZone)} for {slot.duration}m</span>
+                                        </span>
                                     </p>
-                                    <p className="text-xs text-green-600 dark:text-green-400 mt-1">~{beans.toLocaleString()} beans</p>
+                                    <p className="text-xs text-green-600 dark:text-green-400 mt-1 pl-8">~{beans.toLocaleString()} beans</p>
                                 </div>
                                 <button 
                                     onClick={() => handleSlotToggle(identifier)}
@@ -633,10 +691,13 @@ const SettingsPage: React.FC = () => {
 
             <div className="flex flex-wrap gap-2 mb-4">
               <button onClick={handleSelectAll} className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700 transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500">
-                Select All Slots
+                Select All
+              </button>
+              <button onClick={handleSelectPreferred} className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500" disabled={!user.preferredDates || user.preferredDates.size === 0}>
+                Select Preferred
               </button>
               <button onClick={handleClearAll} className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500" disabled={sortedSelectedSlots.length === 0}>
-                Remove All Slots
+                Remove All
               </button>
             </div>
 
@@ -644,7 +705,7 @@ const SettingsPage: React.FC = () => {
                 <h3 className="text-lg font-medium text-purple-600 dark:text-purple-400">All Available Slots ({sortedAvailableSlots.length})</h3>
                 <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
                     <span>Sort by:</span>
-                    {(['time', 'name', 'duration'] as const).map(key => (
+                    {(['time', 'name', 'duration', 'preferred', 'beans'] as const).map(key => (
                     <button key={key} onClick={() => handleSortChange('available', key)} className={`px-2 py-1 rounded capitalize ${availableSort.key === key ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}>
                         {key}
                         {availableSort.key === key && <SortIcon direction={availableSort.direction} />}
@@ -654,7 +715,7 @@ const SettingsPage: React.FC = () => {
             </div>
             <div className="space-y-2 max-h-96 overflow-y-auto pr-2 pb-40">
               {sortedAvailableSlots.length > 0 ? (
-                sortedAvailableSlots.map(({ event, slot }) => {
+                sortedAvailableSlots.map(({ event, slot }, index) => {
                     const slotIdentifier = `${event.name}|${slot.time}|${slot.duration}`;
                     const tiers = event.rewardTiers;
                     const preference = user.preferredSlots.get(slotIdentifier);
@@ -682,10 +743,13 @@ const SettingsPage: React.FC = () => {
                             <div className={`flex items-center justify-between p-3 bg-gray-100 dark:bg-[#2a233a] rounded-md hover:bg-purple-50 dark:hover:bg-purple-900/50 transition-colors ${isPreferred ? 'ring-2 ring-green-500' : ''}`}>
                                 <div className="flex items-center">
                                     <input type="checkbox" checked={isSelected} onChange={() => handleSlotToggle(slotIdentifier)} className="h-4 w-4 rounded bg-gray-200 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-purple-600 focus:ring-purple-500" />
-                                    <span className="ml-3 text-gray-700 dark:text-gray-300 text-sm">
-                                        <span className="font-semibold text-purple-600 dark:text-purple-400">{event.name}</span>
-                                        <span className="text-gray-500 dark:text-gray-400 mx-1">-</span>
-                                        {formatTime(slot.time, user.timeFormat, event, user.timeZone)} for {slot.duration}m
+                                    <span className="ml-3 text-gray-700 dark:text-gray-300 text-sm flex items-baseline">
+                                        <span className="font-semibold text-gray-500 dark:text-gray-400 mr-2 w-6 text-right">{index + 1}.</span>
+                                        <span>
+                                            <span className="font-semibold text-purple-600 dark:text-purple-400">{event.name}</span>
+                                            <span className="text-gray-500 dark:text-gray-400 mx-1">-</span>
+                                            {formatTime(slot.time, user.timeFormat, event, user.timeZone)} for {slot.duration}m
+                                        </span>
                                     </span>
                                 </div>
                                 <div className="flex items-center gap-2">
