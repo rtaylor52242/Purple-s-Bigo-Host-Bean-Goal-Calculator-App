@@ -1,6 +1,3 @@
-
-
-
 import React, { useState, useMemo } from 'react';
 import { extractEventDetailsFromImage } from '../services/geminiService';
 import { Event, UploadHistoryItem, OcrResult, EventSlot } from '../types';

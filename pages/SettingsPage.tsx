@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '../App';
 import { UserProfile, Event, EventSlot, SlotPreference, RecommendationHistoryItem } from '../types';
@@ -25,7 +23,26 @@ const SettingsPage: React.FC = () => {
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
   const [timeZoneSearch, setTimeZoneSearch] = useState('');
+  const [isSpeaking, setIsSpeaking] = useState(false);
 
+
+  useEffect(() => {
+    // This effect runs when isReportModalOpen changes.
+    // If the modal is closing AND speech is active, cancel it.
+    if (!isReportModalOpen && window.speechSynthesis && window.speechSynthesis.speaking) {
+        window.speechSynthesis.cancel();
+        setIsSpeaking(false);
+    }
+  }, [isReportModalOpen]);
+
+  useEffect(() => {
+      // Cleanup function to stop speech synthesis when component unmounts
+      return () => {
+          if (window.speechSynthesis && window.speechSynthesis.speaking) {
+              window.speechSynthesis.cancel();
+          }
+      };
+  }, []);
 
   useEffect(() => {
     if (regionalTiers && regionalTiers.length > 0) {
@@ -374,6 +391,53 @@ const SettingsPage: React.FC = () => {
         }
     };
 
+    const handleReadAloud = () => {
+        if (!('speechSynthesis' in window)) {
+            alert("Sorry, your browser doesn't support text-to-speech.");
+            return;
+        }
+
+        if (window.speechSynthesis.speaking) {
+            window.speechSynthesis.cancel();
+            setIsSpeaking(false);
+            return;
+        }
+    
+        if (!recommendationReport) return;
+    
+        // Clean the report for better speech flow (remove markdown syntax)
+        const cleanedReport = recommendationReport
+            .replace(/#+\s/g, '')     // Remove markdown headers (e.g., ### Title)
+            .replace(/\*\*/g, '')      // Remove bold markers (**)
+            .replace(/\*/g, '')       // Remove italic markers (*)
+            .replace(/^- /gm, '');    // Remove list item markers
+    
+        const utterance = new SpeechSynthesisUtterance(cleanedReport);
+    
+        utterance.onstart = () => {
+            setIsSpeaking(true);
+        };
+    
+        utterance.onend = () => {
+            setIsSpeaking(false);
+        };
+    
+        utterance.onerror = (event) => {
+            // The 'interrupted' error is expected when we manually cancel the speech.
+            // We should not treat it as an application error.
+            if (event.error === 'interrupted') {
+                console.log('Speech synthesis was intentionally interrupted.');
+                setIsSpeaking(false); // Ensure state is reset
+                return;
+            }
+            console.error('SpeechSynthesisUtterance.onerror', event);
+            setIsSpeaking(false);
+            setRecommendationError(`An error occurred during speech synthesis: ${event.error}`);
+        };
+    
+        window.speechSynthesis.speak(utterance);
+    };
+
 
   const goalProgress = useMemo(() => {
     const { monthlyBeanGoal, currentBeanCount } = user;
@@ -473,7 +537,7 @@ const SettingsPage: React.FC = () => {
         case 'beans':
           const beansA = eventA.rewardTiers[eventA.rewardTiers.length - 1]?.beans || 0;
           const beansB = eventB.rewardTiers[eventB.rewardTiers.length - 1]?.beans || 0;
-          compareResult = beansA - beansB;
+          compareResult = beansB - beansA;
           if (compareResult === 0) compareResult = eventA.name.localeCompare(eventB.name);
           break;
         case 'time':
@@ -539,6 +603,19 @@ const SettingsPage: React.FC = () => {
   const TrashIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+    </svg>
+  );
+
+  const SpeakerPlayIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+    </svg>
+  );
+
+  const SpeakerStopIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" clipRule="evenodd" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M17 14l4-4m0 0l-4-4m4 4H7" />
     </svg>
   );
 
@@ -694,7 +771,7 @@ const SettingsPage: React.FC = () => {
                 Select All
               </button>
               <button onClick={handleSelectPreferred} className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500" disabled={!user.preferredDates || user.preferredDates.size === 0}>
-                Select Preferred
+                Add Preferred Dates
               </button>
               <button onClick={handleClearAll} className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500" disabled={sortedSelectedSlots.length === 0}>
                 Remove All
@@ -974,7 +1051,16 @@ const SettingsPage: React.FC = () => {
                             <p>No report generated.</p>
                         )}
                     </div>
-                    <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+                    <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 flex justify-end items-center flex-wrap gap-3">
+                        <button
+                            onClick={handleReadAloud}
+                            disabled={!recommendationReport}
+                            className="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-50 flex items-center gap-2"
+                            aria-label={isSpeaking ? "Stop reading report" : "Read report aloud"}
+                        >
+                            {isSpeaking ? <SpeakerStopIcon /> : <SpeakerPlayIcon />}
+                            <span>{isSpeaking ? 'Stop' : 'Read Aloud'}</span>
+                        </button>
                          <button
                             onClick={handleCopyReport}
                             disabled={!recommendationReport}
