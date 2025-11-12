@@ -185,14 +185,18 @@ export async function generateGoalPathways(data: {
   remainingDays: number;
   maxPathways?: number;
   preferredDates: string[];
-  selectedSlots: { name: string; beans: number; }[];
+  selectedSlots: { name: string; beans: number; duration: number }[];
   availableSlots: { name: string; time: string; duration: number; beans: number; }[];
   totalBeansFromSelected: number;
   timeFormat: 'standard' | 'military';
   allowEventAutoselection: boolean;
   model: string;
+  hoursRequired: number;
+  currentHours: number;
+  totalHoursFromSelected: number;
 }): Promise<string> {
   const beansStillNeeded = data.monthlyBeanGoal - data.currentBeanCount;
+  const hoursStillNeeded = data.hoursRequired - data.currentHours;
 
   const pathwayInstructions = data.allowEventAutoselection
     ? `**Important Formatting for Pathways:**
@@ -203,20 +207,24 @@ export async function generateGoalPathways(data: {
 - Conclude each pathway with a summary: Estimated additional beans, estimated hours, and estimated days required to fulfill the strategy.`;
 
   const prompt = `
-You are an expert strategic advisor for Bigo Live hosts. Your task is to analyze the user's current situation and recommend several distinct pathways to achieve their monthly bean goal.
+You are an expert strategic advisor for Bigo Live hosts. Your task is to analyze the user's current situation and recommend several distinct pathways to achieve their monthly bean and hour goals.
 
 **User's Current Situation:**
 - Monthly Bean Goal: ${data.monthlyBeanGoal.toLocaleString()} beans
+- Required Hours for Goal: ${data.hoursRequired} hours
 - Current Bean Count: ${data.currentBeanCount.toLocaleString()} beans
+- Current Hours Logged: ${data.currentHours} hours
 - **Total Beans Still Needed:** ${beansStillNeeded.toLocaleString()} beans
+- **Total Hours Still Needed:** ${hoursStillNeeded.toLocaleString(undefined, {maximumFractionDigits: 2})} hours
 - Days Remaining this Month: ${data.remainingDays}
 - Maximum number of pathways to suggest: ${data.maxPathways || 6}
 - User's Preferred Streaming Dates: [${data.preferredDates.join(', ') || 'None specified'}]
 - **User's Preferred Time Format:** ${data.timeFormat === 'standard' ? '12-hour AM/PM' : '24-hour military'}. All times in your response MUST be in this format.
 
 **Events Already Selected by the User (These are fixed and must be included in calculations):**
-${data.selectedSlots.length > 0 ? data.selectedSlots.map(s => `- ${s.name}: ${s.beans.toLocaleString()} beans`).join('\n') : '- None'}
+${data.selectedSlots.length > 0 ? data.selectedSlots.map(s => `- ${s.name}: ${s.beans.toLocaleString()} beans (${s.duration} minutes)`).join('\n') : '- None'}
 Total beans from selected events: ${data.totalBeansFromSelected.toLocaleString()} beans
+Total hours from selected events: ${data.totalHoursFromSelected.toLocaleString(undefined, {maximumFractionDigits: 2})} hours
 
 **Available Event Slots the User Can Still Choose From:**
 ${data.availableSlots.map(s => `- ${s.name} at ${s.time} for ${s.duration}m: ${s.beans.toLocaleString()} beans`).join('\n')}
@@ -225,18 +233,18 @@ ${data.availableSlots.map(s => `- ${s.name} at ${s.time} for ${s.duration}m: ${s
 
 Generate a comprehensive report in Markdown format. The report must include the following sections. All titles and headings MUST be bold.
 
-1.  **Executive Summary:** Briefly summarize the user's goal, their current progress, and the total beans they still need to acquire after accounting for their already selected events. Explain the different strategies you will outline.
+1.  **Executive Summary:** Briefly summarize the user's goal (both beans and hours), their current progress, and the total beans and hours they still need to acquire after accounting for their already selected events. Explain the different strategies you will outline.
 
 2.  **Recommended Pathways:**
-    Based on the available slots, generate up to ${data.maxPathways || 6} distinct, sequential plans to meet or exceed the remaining bean goal. For each pathway, provide a clear, **bold** title.
+    Based on the available slots, generate up to ${data.maxPathways || 6} distinct, sequential plans to meet or exceed BOTH the remaining bean and hour goals. Each pathway must satisfy the minimum required hours. For each pathway, provide a clear, **bold** title.
 
     Generate a pathway for each of the following strategies:
-    a. **The "Fastest Hours" Pathway:** Achieve the goal using the combination of events that requires the minimum total streaming time.
-    b. **The "Time-Efficient" Pathway:** Achieve the goal using the fewest number of days, prioritizing packing more events into fewer days if possible.
-    c. **The "Minimalist" Pathway:** Achieve the goal by selecting the fewest number of additional events.
-    d. **The "Bean Maximizer" Pathway:** Achieve the goal by selecting events with the highest bean-per-minute ratio first. This is about efficiency.
-    e. **The "Preferred Days" Pathway:** Achieve the goal while prioritizing events that fall on the user's preferred dates. Only use non-preferred dates if absolutely necessary.
-    f. **The "Consistent Streamer" Pathway:** Achieve the goal by selecting events that spread the work out, aiming for a consistent daily stream time of around 2 hours, if possible.
+    a. **The "Fastest Hours" Pathway:** Achieve the goals using the combination of events that requires the minimum total additional streaming time.
+    b. **The "Time-Efficient" Pathway:** Achieve the goals using the fewest number of days, prioritizing packing more events into fewer days if possible.
+    c. **The "Minimalist" Pathway:** Achieve the goals by selecting the fewest number of additional events.
+    d. **The "Bean Maximizer" Pathway:** Achieve the goals by selecting events with the highest bean-per-minute ratio first. This is about efficiency.
+    e. **The "Preferred Days" Pathway:** Achieve the goals while prioritizing events that fall on the user's preferred dates. Only use non-preferred dates if absolutely necessary.
+    f. **The "Consistent Streamer" Pathway:** Achieve the goals by selecting events that spread the work out, aiming for a consistent daily stream time of around 2 hours, if possible.
 
     ${pathwayInstructions}
 
@@ -245,8 +253,8 @@ Generate a comprehensive report in Markdown format. The report must include the 
 
 **Constraint Checklist & Final Analysis:**
 - All times MUST be formatted in the user's preferred format: ${data.timeFormat === 'standard' ? '12-hour AM/PM' : '24-hour military'}.
-- Ensure all calculations are accurate.
-- All pathways must meet or slightly exceed the required bean goal.
+- Ensure all calculations for both beans and hours are accurate.
+- All pathways must meet or slightly exceed BOTH the required bean goal AND the required hour goal.
 - The tone should be encouraging and strategic.
 - Structure your response clearly with Markdown headings, lists, and bold text for readability.
 - ${data.allowEventAutoselection ? 'Do not invent events; only use the ones from the "Available Event Slots" list.' : 'Base your generalized advice on the types of events available in the "Available Event Slots" list.'}

@@ -312,6 +312,13 @@ const SettingsPage: React.FC = () => {
             return sum + (tier ? tier.beans : 0);
         }, 0);
 
+        const totalHoursFromSelected = sortedSelectedSlots.reduce((sum, slot) => {
+            return sum + ((slot.details?.slot.duration || 0) / 60);
+        }, 0);
+
+        const selectedMonthlyGoalTier = regionalTiers?.find(tier => tier.goal === user.monthlyBeanGoal);
+        const hoursRequiredForGoal = selectedMonthlyGoalTier?.hoursRequired ?? 0;
+
         const dataForApi = {
             monthlyBeanGoal: user.monthlyBeanGoal,
             currentBeanCount: user.currentBeanCount,
@@ -320,7 +327,8 @@ const SettingsPage: React.FC = () => {
             preferredDates: user.preferredDates ? Array.from(user.preferredDates) as string[] : [],
             selectedSlots: sortedSelectedSlots.map(s => ({
                 name: s.details?.event.name || 'Unknown Event',
-                beans: s.details?.event.rewardTiers[s.pref.rewardTierIndex]?.beans || 0
+                beans: s.details?.event.rewardTiers[s.pref.rewardTierIndex]?.beans || 0,
+                duration: s.details?.slot.duration || 0,
             })),
             availableSlots: sortedAvailableSlots.map(s => ({
                 name: s.event.name,
@@ -328,10 +336,13 @@ const SettingsPage: React.FC = () => {
                 duration: s.slot.duration,
                 beans: s.event.rewardTiers[s.event.rewardTiers.length - 1]?.beans || 0,
             })),
-            totalBeansFromSelected: totalBeansFromSelected,
+            totalBeansFromSelected,
             timeFormat: user.timeFormat,
             allowEventAutoselection: user.allowEventAutoselection || false,
             model: user.recommendationModel || 'gemini-2.5-pro',
+            hoursRequired: hoursRequiredForGoal,
+            currentHours: user.currentHours || 0,
+            totalHoursFromSelected,
         };
 
         const report = await generateGoalPathways(dataForApi);
