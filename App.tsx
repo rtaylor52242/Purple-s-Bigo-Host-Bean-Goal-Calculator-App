@@ -1,3 +1,4 @@
+
 import React, { useState, createContext, useContext, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { UserProfile, Event, AdminUploadState, UploadHistoryItem, SlotPreference, RegionalTier } from './types';
@@ -6,6 +7,8 @@ import SettingsPage from './pages/SettingsPage';
 import AdminUploadPage from './pages/AdminUploadPage';
 import AdminToolsPage from './pages/AdminToolsPage';
 import LoginPage from './pages/LoginPage';
+import SchedulePage from './pages/SchedulePage';
+import TierChartPage from './pages/TierChartPage'; // Import new page
 import { defaultRegionalTiers } from './data/defaultTiers';
 
 // Mock Data - used as a fallback if no saved data, or to fill missing fields
@@ -23,6 +26,8 @@ const defaultInitialUser: UserProfile = {
   currentForeignBeanCount: 0, // Re-added
   preferredDates: new Set<string>(), // Re-added
   recommendationHistory: [],
+  allowEventAutoselection: false,
+  recommendationModel: 'gemini-2.5-pro',
 };
 
 const initialEvents: Event[] = [];
@@ -150,19 +155,21 @@ const App: React.FC = () => {
     setTheme,
   };
   
-  const defaultAuthenticatedRoute = events.length > 0 ? "/settings" : "/admin-upload";
+  const defaultAuthenticatedRoute = "/calendar";
 
   return (
     <AppContext.Provider value={contextValue}>
       <HashRouter>
         <div className="min-h-screen text-gray-900 dark:text-gray-200">
           {isAuthenticated && <Header />}
-          <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+          <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 print:max-w-none print:p-0">
             <Routes>
               <Route path="/login" element={!isAuthenticated ? <LoginPage /> : <Navigate to={defaultAuthenticatedRoute} replace />} />
-              <Route path="/settings" element={<ProtectedRoute element={<SettingsPage />} />} />
+              <Route path="/settings" element={<ProtectedRoute element={<AdminToolsPage />} />} />
+              <Route path="/tier-chart" element={<ProtectedRoute element={<TierChartPage />} />} />
+              <Route path="/schedule" element={<ProtectedRoute element={<SettingsPage />} />} />
+              <Route path="/calendar" element={<ProtectedRoute element={<SchedulePage />} />} />
               <Route path="/admin-upload" element={<ProtectedRoute element={<AdminUploadPage />} />} />
-              <Route path="/admin-tools" element={<ProtectedRoute element={<AdminToolsPage />} />} /> {/* Re-added */}
               <Route path="/" element={<Navigate to={isAuthenticated ? defaultAuthenticatedRoute : "/login"} replace />} />
             </Routes>
           </main>

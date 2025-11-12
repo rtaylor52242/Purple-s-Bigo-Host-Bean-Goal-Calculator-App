@@ -188,8 +188,19 @@ export async function generateGoalPathways(data: {
   selectedSlots: { name: string; beans: number; }[];
   availableSlots: { name: string; time: string; duration: number; beans: number; }[];
   totalBeansFromSelected: number;
+  timeFormat: 'standard' | 'military';
+  allowEventAutoselection: boolean;
+  model: string;
 }): Promise<string> {
   const beansStillNeeded = data.monthlyBeanGoal - data.currentBeanCount;
+
+  const pathwayInstructions = data.allowEventAutoselection
+    ? `**Important Formatting for Pathways:**
+- For each pathway, list the specific events to select (Name, Time, Duration, Beans).
+- Conclude each pathway with a summary: Total additional beans, total additional hours, and total additional days required.`
+    : `**Important Formatting for Pathways:**
+- For each pathway, provide a generalized strategy. DO NOT list specific events to select. Instead, describe the *types* of events the user should look for (e.g., "Select 3 high-bean weekend events," or "Choose about 5 events with a high bean-per-minute ratio.").
+- Conclude each pathway with a summary: Estimated additional beans, estimated hours, and estimated days required to fulfill the strategy.`;
 
   const prompt = `
 You are an expert strategic advisor for Bigo Live hosts. Your task is to analyze the user's current situation and recommend several distinct pathways to achieve their monthly bean goal.
@@ -201,6 +212,7 @@ You are an expert strategic advisor for Bigo Live hosts. Your task is to analyze
 - Days Remaining this Month: ${data.remainingDays}
 - Maximum number of pathways to suggest: ${data.maxPathways || 6}
 - User's Preferred Streaming Dates: [${data.preferredDates.join(', ') || 'None specified'}]
+- **User's Preferred Time Format:** ${data.timeFormat === 'standard' ? '12-hour AM/PM' : '24-hour military'}. All times in your response MUST be in this format.
 
 **Events Already Selected by the User (These are fixed and must be included in calculations):**
 ${data.selectedSlots.length > 0 ? data.selectedSlots.map(s => `- ${s.name}: ${s.beans.toLocaleString()} beans`).join('\n') : '- None'}
@@ -226,24 +238,23 @@ Generate a comprehensive report in Markdown format. The report must include the 
     e. **The "Preferred Days" Pathway:** Achieve the goal while prioritizing events that fall on the user's preferred dates. Only use non-preferred dates if absolutely necessary.
     f. **The "Consistent Streamer" Pathway:** Achieve the goal by selecting events that spread the work out, aiming for a consistent daily stream time of around 2 hours, if possible.
 
-    **Important Formatting for Pathways:**
-    - For each pathway, list the specific events to select (Name, Time, Duration, Beans).
-    - Conclude each pathway with a summary: Total additional beans, total additional hours, and total additional days required.
+    ${pathwayInstructions}
 
 3.  **Best Pathway Summary:**
     After generating the pathways, add a final section with the bold title: **Best Pathway Summary**. In this section, analyze your own recommendations. For each of the 6 strategies you were asked to generate (Fastest Hours, Time-Efficient, etc.), explicitly state which of your generated pathways is the best fit and provide a one-sentence justification.
 
 **Constraint Checklist & Final Analysis:**
+- All times MUST be formatted in the user's preferred format: ${data.timeFormat === 'standard' ? '12-hour AM/PM' : '24-hour military'}.
 - Ensure all calculations are accurate.
 - All pathways must meet or slightly exceed the required bean goal.
 - The tone should be encouraging and strategic.
 - Structure your response clearly with Markdown headings, lists, and bold text for readability.
-- Do not invent events; only use the ones from the "Available Event Slots" list.
+- ${data.allowEventAutoselection ? 'Do not invent events; only use the ones from the "Available Event Slots" list.' : 'Base your generalized advice on the types of events available in the "Available Event Slots" list.'}
 `;
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-pro", // Using a more powerful model for complex reasoning
+      model: data.model,
       contents: prompt,
     });
     return response.text;

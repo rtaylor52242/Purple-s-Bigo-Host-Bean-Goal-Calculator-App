@@ -3,6 +3,10 @@ import React, { useState, useMemo, useCallback } from 'react';
 interface CalendarProps {
   selectedDates: Set<string>; // Now receives selected dates as a prop
   onDatesChange: (selectedDates: Set<string>) => void; // Callback to update parent
+  currentMonth: Date;
+  onMonthChange: (newDate: Date) => void;
+  holidays?: Map<string, string>;
+  onHolidayClick?: (name: string, date: Date) => void;
 }
 
 interface DayInfo {
@@ -10,8 +14,7 @@ interface DayInfo {
   isCurrentMonth: boolean;
 }
 
-const Calendar: React.FC<CalendarProps> = ({ selectedDates, onDatesChange }) => {
-  const [currentMonth, setCurrentMonth] = useState(new Date()); // Tracks the month displayed
+const Calendar: React.FC<CalendarProps> = ({ selectedDates, onDatesChange, currentMonth, onMonthChange, holidays, onHolidayClick }) => {
   const [lastClickedDate, setLastClickedDate] = useState<string | null>(null); // For shift-click range selection
 
   const getDaysInMonth = (date: Date): DayInfo[] => {
@@ -61,14 +64,14 @@ const Calendar: React.FC<CalendarProps> = ({ selectedDates, onDatesChange }) => 
   const daysInCalendar = useMemo(() => getDaysInMonth(currentMonth), [currentMonth]);
 
   const goToPreviousMonth = useCallback(() => {
-    setCurrentMonth(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+    onMonthChange(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
     setLastClickedDate(null); // Reset last clicked on month change
-  }, []);
+  }, [currentMonth, onMonthChange]);
 
   const goToNextMonth = useCallback(() => {
-    setCurrentMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
+    onMonthChange(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
     setLastClickedDate(null); // Reset last clicked on month change
-  }, []);
+  }, [currentMonth, onMonthChange]);
 
   const handleDayClick = useCallback((dayDate: Date, e: React.MouseEvent) => {
     if (!dayDate) return; 
@@ -302,6 +305,7 @@ const Calendar: React.FC<CalendarProps> = ({ selectedDates, onDatesChange }) => 
         {daysInCalendar.map((day, index) => {
           const dateIsoString = day.date.toISOString().split('T')[0];
           const isSelected = selectedDates.has(dateIsoString); // Check against prop
+          const holidayName = holidays?.get(dateIsoString);
           const today = new Date();
           const isToday = day.date.getDate() === today.getDate() &&
                           day.date.getMonth() === today.getMonth() &&
@@ -322,6 +326,20 @@ const Calendar: React.FC<CalendarProps> = ({ selectedDates, onDatesChange }) => 
               role="gridcell"
             >
               <span className="z-10">{day.date.getDate()}</span>
+              {holidayName && (
+                <div 
+                  className="absolute bottom-1 right-1 h-2 w-2 bg-red-500 rounded-full z-20 cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation(); // Prevents day selection
+                    if (onHolidayClick) {
+                      onHolidayClick(holidayName, day.date);
+                    } else {
+                      alert(holidayName);
+                    }
+                  }}
+                  title={holidayName} // Keep tooltip on the dot itself
+                ></div>
+              )}
             </div>
           );
         })}

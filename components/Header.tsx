@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAppContext } from '../App';
@@ -29,7 +30,7 @@ const Header: React.FC = () => {
     }`;
 
   return (
-    <header className="bg-white dark:bg-[#1a1625] shadow-md dark:shadow-lg">
+    <header className="bg-white dark:bg-[#1a1625] shadow-md dark:shadow-lg print:hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center">
@@ -41,13 +42,19 @@ const Header: React.FC = () => {
             <div>
               <div className="ml-4 md:ml-10 flex items-baseline space-x-2 md:space-x-4">
                 <NavLink to="/settings" className={navLinkClass}>
-                  Settings
+                  Date Preferences
+                </NavLink>
+                <NavLink to="/tier-chart" className={navLinkClass}>
+                  Tier Chart
                 </NavLink>
                 <NavLink to="/admin-upload" className={navLinkClass}>
                   Event Uploads
                 </NavLink>
-                <NavLink to="/admin-tools" className={navLinkClass}>
-                  Admin Tools
+                <NavLink to="/schedule" className={navLinkClass}>
+                  Schedule
+                </NavLink>
+                 <NavLink to="/calendar" className={navLinkClass}>
+                  Calendar
                 </NavLink>
               </div>
             </div>

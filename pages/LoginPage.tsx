@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../App';
 
 const LoginPage: React.FC = () => {
-  const { setIsAuthenticated, events } = useAppContext();
+  const { setIsAuthenticated } = useAppContext();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -17,8 +17,7 @@ const LoginPage: React.FC = () => {
     console.log('Logging in with:', { email, password });
     setError('');
     setIsAuthenticated(true);
-    const targetRoute = events.length > 0 ? '/settings' : '/admin-upload';
-    navigate(targetRoute);
+    navigate('/calendar');
   };
 
   return (

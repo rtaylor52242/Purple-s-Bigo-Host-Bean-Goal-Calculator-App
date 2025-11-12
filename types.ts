@@ -49,6 +49,8 @@ export interface UserProfile {
   currentForeignBeanCount?: number;
   preferredDates?: Set<string>; // New: Stores selected dates from the calendar as ISO strings
   recommendationHistory?: RecommendationHistoryItem[];
+  allowEventAutoselection?: boolean;
+  recommendationModel?: string;
 }
 
 export interface EventSlot {
@@ -85,6 +87,15 @@ export interface AdminUploadState {
   ocrResult: OcrResult | null;
   processedEvent: Omit<Event, 'slots'> & { slots: Omit<EventSlot, 'id'|'estimatedPayout'>[] } | null;
   selectedOcrSlots: Set<string>;
+}
+
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  start: Date;
+  end: Date;
+  status: 'confirmed' | 'preview';
+  allDay?: boolean;
 }
 
 export interface AppContextType {

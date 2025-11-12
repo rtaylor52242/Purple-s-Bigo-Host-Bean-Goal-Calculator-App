@@ -21,6 +21,7 @@ const SettingsPage: React.FC = () => {
   const [recommendationReport, setRecommendationReport] = useState<string | null>(null);
   const [recommendationError, setRecommendationError] = useState<string | null>(null);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [isReportModalMinimized, setIsReportModalMinimized] = useState(false);
   const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
   const [timeZoneSearch, setTimeZoneSearch] = useState('');
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -303,6 +304,7 @@ const SettingsPage: React.FC = () => {
     setIsGenerating(true);
     setRecommendationError(null);
     setRecommendationReport(null);
+    setIsReportModalMinimized(false);
 
     try {
         const totalBeansFromSelected = sortedSelectedSlots.reduce((sum, slot) => {
@@ -315,7 +317,6 @@ const SettingsPage: React.FC = () => {
             currentBeanCount: user.currentBeanCount,
             remainingDays: remainingDaysInMonth,
             maxPathways: user.maxPathways,
-            // FIX: Explicitly cast the array from the Set to string[] to resolve type inference issue.
             preferredDates: user.preferredDates ? Array.from(user.preferredDates) as string[] : [],
             selectedSlots: sortedSelectedSlots.map(s => ({
                 name: s.details?.event.name || 'Unknown Event',
@@ -325,9 +326,12 @@ const SettingsPage: React.FC = () => {
                 name: s.event.name,
                 time: s.slot.time,
                 duration: s.slot.duration,
-                beans: s.event.rewardTiers[s.event.rewardTiers.length - 1]?.beans || 0, // Assume max tier for available
+                beans: s.event.rewardTiers[s.event.rewardTiers.length - 1]?.beans || 0,
             })),
             totalBeansFromSelected: totalBeansFromSelected,
+            timeFormat: user.timeFormat,
+            allowEventAutoselection: user.allowEventAutoselection || false,
+            model: user.recommendationModel || 'gemini-2.5-pro',
         };
 
         const report = await generateGoalPathways(dataForApi);
@@ -619,9 +623,21 @@ const SettingsPage: React.FC = () => {
     </svg>
   );
 
+  const MinimizeIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M18 12H6" />
+    </svg>
+  );
+
+  const MaximizeIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4h4m12 4V4h-4M4 16v4h4m12-4v4h-4" />
+    </svg>
+  );
+
   return (
     <div className="space-y-8">
-      <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Your Settings</h1>
+      <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Your Schedule Preferences</h1>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-8">
@@ -631,10 +647,11 @@ const SettingsPage: React.FC = () => {
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Profile</h2>
                 <button 
                 onClick={() => setIsDatesModalOpen(true)}
-                className="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none"
+                className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700/50 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
                 aria-label="Show preferred dates reminder"
                 >
                 <CalendarIcon />
+                <span>Preferred Dates Reminder</span>
                 </button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -907,6 +924,26 @@ const SettingsPage: React.FC = () => {
                 />
                 {maxPathwaysError && <p className="mt-2 text-sm text-red-500 dark:text-red-400">{maxPathwaysError}</p>}
               </div>
+               <div>
+                <label htmlFor="recommendationModel" className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Recommendation AI Model</label>
+                <select
+                  id="recommendationModel"
+                  name="recommendationModel"
+                  value={user.recommendationModel || 'gemini-2.5-pro'}
+                  onChange={handleInputChange}
+                  className="w-full bg-gray-100 dark:bg-[#2a233a] border border-gray-300 dark:border-gray-600 rounded-md py-2 px-3 text-gray-900 dark:text-white focus:ring-purple-500 focus:border-purple-500"
+                >
+                  <option value="gemini-2.5-pro">Gemini 2.5 Pro (High Quality)</option>
+                  <option value="gemini-2.5-flash">Gemini 2.5 Flash (Fast)</option>
+                </select>
+              </div>
+              <div>
+                <label className="flex items-center mt-2">
+                  <input type="checkbox" name="allowEventAutoselection" checked={user.allowEventAutoselection || false} onChange={handleInputChange} className="h-4 w-4 rounded bg-gray-200 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-purple-600 focus:ring-purple-500" />
+                  <span className="ml-2 text-gray-700 dark:text-gray-300">Allow Event Autoselection in Pathways</span>
+                </label>
+                <p className="text-xs text-gray-500 dark:text-gray-400 ml-6">When checked, pathways will suggest specific events to add. When unchecked, pathways will provide more generalized advice.</p>
+              </div>
             </div>
           </div>
 
@@ -970,6 +1007,7 @@ const SettingsPage: React.FC = () => {
                                             onClick={() => {
                                                 setRecommendationReport(item.report);
                                                 setIsReportModalOpen(true);
+                                                setIsReportModalMinimized(false);
                                             }}
                                             className="px-3 py-1 text-xs font-medium text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/50 rounded-md hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors"
                                         >
@@ -1027,61 +1065,77 @@ const SettingsPage: React.FC = () => {
       )}
 
         {isReportModalOpen && (
-            <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4" onClick={() => setIsReportModalOpen(false)}>
-                <div className="bg-white dark:bg-[#1a1625] rounded-lg shadow-xl w-full max-w-3xl p-6 flex flex-col" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex justify-between items-center mb-4 border-b border-gray-200 dark:border-gray-700 pb-3">
-                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Goal Achievement Pathways</h3>
-                        <button
-                            onClick={() => setIsReportModalOpen(false)}
-                            className="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none"
-                            aria-label="Close report"
-                        >
-                            &times;
-                        </button>
+            <div 
+              className={`fixed ${isReportModalMinimized ? 'bottom-4 right-4 w-96' : 'inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4'} z-50 transition-all duration-300`}
+              onClick={!isReportModalMinimized ? () => setIsReportModalOpen(false) : undefined}
+            >
+                <div className={`bg-white dark:bg-[#1a1625] rounded-lg shadow-xl flex flex-col ${isReportModalMinimized ? '' : 'w-full max-w-3xl'}`} onClick={(e) => e.stopPropagation()}>
+                    <div className="flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700">
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">Goal Achievement Pathways</h3>
+                        <div className="flex items-center gap-2">
+                           <button
+                                onClick={() => setIsReportModalMinimized(!isReportModalMinimized)}
+                                className="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none"
+                                aria-label={isReportModalMinimized ? "Maximize report" : "Minimize report"}
+                            >
+                                {isReportModalMinimized ? <MaximizeIcon /> : <MinimizeIcon />}
+                            </button>
+                            <button
+                                onClick={() => setIsReportModalOpen(false)}
+                                className="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none text-2xl leading-none"
+                                aria-label="Close report"
+                            >
+                                &times;
+                            </button>
+                        </div>
                     </div>
-                    <div id="report-modal-content" className="flex-grow max-h-[70vh] overflow-y-auto pr-4 text-gray-800 dark:text-gray-200">
-                        {recommendationError ? (
-                            <div className="text-red-500 dark:text-red-400">
-                                <h4 className="font-bold">Error</h4>
-                                <p>{recommendationError}</p>
+                    {!isReportModalMinimized && (
+                        <>
+                            <div id="report-modal-content" className="flex-grow max-h-[70vh] overflow-y-auto p-6 text-gray-800 dark:text-gray-200">
+                                {recommendationError ? (
+                                    <div className="text-red-500 dark:text-red-400">
+                                        <h4 className="font-bold">Error</h4>
+                                        <p>{recommendationError}</p>
+                                    </div>
+                                ) : recommendationReport ? (
+                                    <pre className="whitespace-pre-wrap font-sans">{recommendationReport}</pre>
+                                ) : (
+                                    <p>No report generated.</p>
+                                )}
                             </div>
-                        ) : recommendationReport ? (
-                            <pre className="whitespace-pre-wrap font-sans">{recommendationReport}</pre>
-                        ) : (
-                            <p>No report generated.</p>
-                        )}
-                    </div>
-                    <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 flex justify-end items-center flex-wrap gap-3">
-                        <button
-                            onClick={handleReadAloud}
-                            disabled={!recommendationReport}
-                            className="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-50 flex items-center gap-2"
-                            aria-label={isSpeaking ? "Stop reading report" : "Read report aloud"}
-                        >
-                            {isSpeaking ? <SpeakerStopIcon /> : <SpeakerPlayIcon />}
-                            <span>{isSpeaking ? 'Stop' : 'Read Aloud'}</span>
-                        </button>
-                         <button
-                            onClick={handleCopyReport}
-                            disabled={!recommendationReport}
-                            className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-400 disabled:opacity-50"
-                        >
-                            Copy Text
-                        </button>
-                        <button
-                            onClick={handlePrintReport}
-                            disabled={!recommendationReport}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-                        >
-                            Print
-                        </button>
-                        <button
-                            onClick={() => setIsReportModalOpen(false)}
-                            className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                        >
-                            Close
-                        </button>
-                    </div>
+                            <div className="mt-auto p-4 border-t border-gray-200 dark:border-gray-700 flex justify-end items-center flex-wrap gap-3">
+                                <button
+                                    onClick={handleReadAloud}
+                                    disabled={!recommendationReport}
+                                    className="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-50 flex items-center gap-2"
+                                    aria-label={isSpeaking ? "Stop reading report" : "Read report aloud"}
+                                >
+                                    {isSpeaking ? <SpeakerStopIcon /> : <SpeakerPlayIcon />}
+                                    <span>{isSpeaking ? 'Stop' : 'Read Aloud'}</span>
+                                </button>
+                                <button
+                                    onClick={handleCopyReport}
+                                    disabled={!recommendationReport}
+                                    className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-400 disabled:opacity-50"
+                                >
+                                    Copy Text
+                                </button>
+                                <button
+                                    onClick={handlePrintReport}
+                                    disabled={!recommendationReport}
+                                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                                >
+                                    Print
+                                </button>
+                                <button
+                                    onClick={() => setIsReportModalOpen(false)}
+                                    className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                >
+                                    Close
+                                </button>
+                            </div>
+                        </>
+                    )}
                 </div>
             </div>
         )}
