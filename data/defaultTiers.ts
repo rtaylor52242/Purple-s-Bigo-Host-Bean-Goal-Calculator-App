@@ -1,4 +1,4 @@
-import { RegionalTier } from './types';
+import { RegionalTier } from '../types';
 
 export const defaultRegionalTiers: RegionalTier[] = [
   { rank: 'S20', goal: 4000000, hoursRequired: 56, payout: 32000, agencySupport: 1600000, walletProfit: 19047 },

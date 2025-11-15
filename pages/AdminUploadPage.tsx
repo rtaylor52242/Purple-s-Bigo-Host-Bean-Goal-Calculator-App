@@ -163,7 +163,7 @@ const AdminUploadPage: React.FC = () => {
     const itemsToProcess = uploadItems.filter(item => item.file && !item.ocrResult && !item.error);
 
     // Process items sequentially to avoid rate limiting
-    for (const item of itemsToProcess) {
+    for (const [index, item] of itemsToProcess.entries()) {
         try {
             const base64Image = await fileToBase64(item.file);
             const result = await extractEventDetailsFromImage(base64Image);
@@ -215,6 +215,11 @@ const AdminUploadPage: React.FC = () => {
                 isLoading: false,
                 error: err.message || 'Failed to process image.',
             } : i));
+        }
+
+        // Add a delay between API calls to avoid rate limiting (15 RPM for gemini-flash)
+        if (index < itemsToProcess.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 4100)); // ~4.1 seconds delay
         }
     }
 
