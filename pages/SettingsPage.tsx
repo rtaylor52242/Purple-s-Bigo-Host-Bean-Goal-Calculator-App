@@ -56,6 +56,24 @@ const SettingsPage: React.FC = () => {
       }
     }
   }, [regionalTiers, user.monthlyBeanGoal, setUser]);
+  
+  // Filter preferred dates if the month lock is on
+  const filteredPreferredDates = useMemo(() => {
+    if (!user.isMonthLocked || !user.preferredDates) {
+        return user.preferredDates || new Set<string>();
+    }
+    const today = new Date();
+    const currentMonth = today.getMonth();
+    const currentYear = today.getFullYear();
+    
+    return new Set(
+        Array.from(user.preferredDates).filter(isoDate => {
+            const date = new Date(isoDate + 'T00:00:00Z'); // Treat as UTC
+            return date.getUTCMonth() === currentMonth && date.getUTCFullYear() === currentYear;
+        })
+    );
+  }, [user.preferredDates, user.isMonthLocked]);
+
 
   const timeZoneOptions = useMemo(() => {
     try {
@@ -262,8 +280,11 @@ const SettingsPage: React.FC = () => {
   };
 
   const handleSelectPreferred = () => {
-    if (!user.preferredDates || user.preferredDates.size === 0) {
-        alert("You haven't selected any preferred dates. Please go to Admin Tools to select them.");
+    if (!filteredPreferredDates || filteredPreferredDates.size === 0) {
+        const alertMessage = user.isMonthLocked 
+            ? "You haven't selected any preferred dates in the current month. Please go to Date Preferences to select them, or turn off 'Lock to Current Month'."
+            : "You haven't selected any preferred dates. Please go to Date Preferences to select them.";
+        alert(alertMessage);
         return;
     }
 
@@ -273,12 +294,12 @@ const SettingsPage: React.FC = () => {
         slotDetailsMap.forEach((details, identifier) => {
             const { event } = details;
             const dateMatch = event.name.match(/\((\d{2}\/\d{2}\/\d{4})\)/);
-            if (dateMatch?.[1] && prevUser.preferredDates) {
+            if (dateMatch?.[1]) {
                 const [month, day, year] = dateMatch[1].split('/');
                 const eventDate = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day)));
                 const eventIsoDate = eventDate.toISOString().split('T')[0];
                 
-                if (prevUser.preferredDates.has(eventIsoDate)) {
+                if (filteredPreferredDates.has(eventIsoDate)) {
                     const currentPref = newPreferredSlots.get(identifier);
                     const highestTierIndex = event.rewardTiers.length - 1;
                     newPreferredSlots.set(identifier, {
@@ -324,7 +345,7 @@ const SettingsPage: React.FC = () => {
             currentBeanCount: user.currentBeanCount,
             remainingDays: remainingDaysInMonth,
             maxPathways: user.maxPathways,
-            preferredDates: user.preferredDates ? Array.from(user.preferredDates) as string[] : [],
+            preferredDates: Array.from(filteredPreferredDates) as string[],
             selectedSlots: sortedSelectedSlots.map(s => ({
                 name: s.details?.event.name || 'Unknown Event',
                 beans: s.details?.event.rewardTiers[s.pref.rewardTierIndex]?.beans || 0,
@@ -528,13 +549,13 @@ const SettingsPage: React.FC = () => {
     );
 
     const isPreferred = (event: Event) => {
-        if (!user.preferredDates || user.preferredDates.size === 0) return false;
+        if (!filteredPreferredDates || filteredPreferredDates.size === 0) return false;
         const dateMatch = event.name.match(/\((\d{2}\/\d{2}\/\d{4})\)/);
         if (!dateMatch?.[1]) return false;
         const [month, day, year] = dateMatch[1].split('/');
         const eventDate = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day)));
         const eventIsoDate = eventDate.toISOString().split('T')[0];
-        return user.preferredDates.has(eventIsoDate);
+        return filteredPreferredDates.has(eventIsoDate);
     };
 
     allSlots.sort((a, b) => {
@@ -573,9 +594,9 @@ const SettingsPage: React.FC = () => {
     });
 
     return allSlots;
-  }, [availableSlotsByEvent, availableSort, user.preferredDates]);
+  }, [availableSlotsByEvent, availableSort, filteredPreferredDates]);
   
-  const formattedPreferredDates = useMemo(() => formatSelectedDatesForDisplay(user.preferredDates || new Set()), [user.preferredDates]);
+  const formattedPreferredDates = useMemo(() => formatSelectedDatesForDisplay(filteredPreferredDates), [filteredPreferredDates]);
     
   const BigoUserIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
@@ -735,6 +756,14 @@ const SettingsPage: React.FC = () => {
           <div className="bg-white dark:bg-[#1a1625] p-6 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
             <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Event Preferences</h2>
             
+            {user.isMonthLocked && (
+              <div className="mb-4 p-3 bg-purple-100 dark:bg-purple-900/50 border border-purple-300 dark:border-purple-700 rounded-md text-sm text-purple-800 dark:text-purple-200">
+                <p>
+                  <span className="font-semibold">Month Lock is ON.</span> Only preferred dates within the current month are being used for sorting and recommendations.
+                </p>
+              </div>
+            )}
+
             {sortedSelectedSlots.length > 0 && (
               <div className="mb-6">
                 <div className="flex justify-between items-center mb-3 border-b border-gray-200 dark:border-gray-700 pb-2">
@@ -758,11 +787,11 @@ const SettingsPage: React.FC = () => {
                         
                         const dateMatch = event.name.match(/\((\d{2}\/\d{2}\/\d{4})\)/);
                         let isPreferred = false;
-                        if (dateMatch?.[1] && user.preferredDates) {
+                        if (dateMatch?.[1] && filteredPreferredDates) {
                             const [month, day, year] = dateMatch[1].split('/');
                             const eventDate = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day)));
                             const eventIsoDate = eventDate.toISOString().split('T')[0];
-                            if (user.preferredDates.has(eventIsoDate)) {
+                            if (filteredPreferredDates.has(eventIsoDate)) {
                                 isPreferred = true;
                             }
                         }
@@ -798,7 +827,7 @@ const SettingsPage: React.FC = () => {
               <button onClick={handleSelectAll} className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700 transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500">
                 Select All
               </button>
-              <button onClick={handleSelectPreferred} className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500" disabled={!user.preferredDates || user.preferredDates.size === 0}>
+              <button onClick={handleSelectPreferred} className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500" disabled={!filteredPreferredDates || filteredPreferredDates.size === 0}>
                 Add Preferred Dates
               </button>
               <button onClick={handleClearAll} className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500" disabled={sortedSelectedSlots.length === 0}>
@@ -834,11 +863,11 @@ const SettingsPage: React.FC = () => {
 
                     const dateMatch = event.name.match(/\((\d{2}\/\d{2}\/\d{4})\)/);
                     let isPreferred = false;
-                    if (dateMatch?.[1] && user.preferredDates) {
+                    if (dateMatch?.[1] && filteredPreferredDates) {
                         const [month, day, year] = dateMatch[1].split('/');
                         const eventDate = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day)));
                         const eventIsoDate = eventDate.toISOString().split('T')[0];
-                        if (user.preferredDates.has(eventIsoDate)) {
+                        if (filteredPreferredDates.has(eventIsoDate)) {
                             isPreferred = true;
                         }
                     }
@@ -1052,6 +1081,13 @@ const SettingsPage: React.FC = () => {
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4" onClick={() => setIsDatesModalOpen(false)}>
           <div className="bg-white dark:bg-[#1a1625] rounded-lg shadow-xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Your Preferred Dates Reminder</h3>
+            {user.isMonthLocked && (
+              <div className="mb-4 p-2 bg-purple-100 dark:bg-purple-900/50 border border-purple-300 dark:border-purple-700 rounded-md text-xs text-purple-800 dark:text-purple-200">
+                <p>
+                  <span className="font-semibold">Month Lock is ON.</span> Only dates in the current month are shown.
+                </p>
+              </div>
+            )}
             <div className="max-h-60 overflow-y-auto bg-gray-100 dark:bg-[#2a233a] p-4 rounded-md">
               {formattedPreferredDates.length > 0 ? (
                 formattedPreferredDates.map(group => (
@@ -1060,7 +1096,7 @@ const SettingsPage: React.FC = () => {
                   </div>
                 ))
               ) : (
-                <p className="text-gray-500 dark:text-gray-400">You haven't selected any preferred dates on the Admin Tools page.</p>
+                <p className="text-gray-500 dark:text-gray-400">You haven't selected any preferred dates.</p>
               )}
             </div>
             <div className="mt-6 text-right">

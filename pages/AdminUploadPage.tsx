@@ -44,6 +44,7 @@ interface UploadItem {
   selectedOcrSlots: Set<string>;
   dateTimeSlots: DateTimeSlot[];
   base64Image?: string;
+  excludedDates?: Date[];
 }
 
 const AdminUploadPage: React.FC = () => {
@@ -103,9 +104,10 @@ const AdminUploadPage: React.FC = () => {
 
   const handleHistoryClick = (item: UploadHistoryItem) => {
     if (item.ocrResult) {
-        const dates = parseEventDates(item.ocrResult.eventDates);
+        const { validDates, excludedPastDates } = parseEventDates(item.ocrResult.eventDates);
+
         const generatedSlots: DateTimeSlot[] = [];
-        dates.forEach(date => {
+        validDates.forEach(date => {
             item.ocrResult!.slots.forEach(slot => {
             generatedSlots.push({
                 id: `${date.toISOString().split('T')[0]}T${slot.time}`,
@@ -131,7 +133,8 @@ const AdminUploadPage: React.FC = () => {
             },
             selectedOcrSlots: new Set(generatedSlots.map(s => s.id)),
             dateTimeSlots: generatedSlots,
-            base64Image: item.preview.startsWith('data:') ? item.preview.split(',')[1] : undefined
+            base64Image: item.preview.startsWith('data:') ? item.preview.split(',')[1] : undefined,
+            excludedDates: excludedPastDates,
         };
         setUploadItems([newUploadItem]); // Replace current batch with this history item
     }
@@ -168,10 +171,16 @@ const AdminUploadPage: React.FC = () => {
             if (result.slots.length === 0) {
                 throw new Error("No valid time slots were detected in the image.");
             }
+            
+            const { validDates, excludedPastDates } = parseEventDates(result.eventDates);
 
-            const dates = parseEventDates(result.eventDates);
+            if (validDates.length === 0 && excludedPastDates.length > 0) {
+                const formattedExcluded = excludedPastDates.map(d => d.toLocaleDateString('en-US', { timeZone: 'UTC' })).join(', ');
+                throw new Error(`All detected dates (${formattedExcluded}) are in the past and were excluded.`);
+            }
+
             const generatedSlots: DateTimeSlot[] = [];
-            dates.forEach(date => {
+            validDates.forEach(date => {
                 result.slots.forEach(slot => {
                 generatedSlots.push({
                     id: `${date.toISOString().split('T')[0]}T${slot.time}`,
@@ -196,6 +205,7 @@ const AdminUploadPage: React.FC = () => {
                 dateTimeSlots: generatedSlots,
                 selectedOcrSlots: new Set(generatedSlots.map(s => s.id)),
                 base64Image,
+                excludedDates: excludedPastDates,
             } : i));
 
         } catch (err: any) {
@@ -370,6 +380,13 @@ const AdminUploadPage: React.FC = () => {
                             </div>
                             <div className="w-full md:w-3/4">
                                 {item.error && <p className="text-red-500 dark:text-red-400 text-sm">{item.error}</p>}
+                                {item.excludedDates && item.excludedDates.length > 0 && (
+                                    <div className="mb-3 p-2 bg-yellow-100 dark:bg-yellow-900/50 border-l-4 border-yellow-500 text-yellow-800 dark:text-yellow-200 text-xs rounded-r-md">
+                                        <p>
+                                            <span className="font-bold">Note:</span> The following dates were in the past and have been excluded: {item.excludedDates.map(d => d.toLocaleDateString('en-US', { timeZone: 'UTC' })).join(', ')}
+                                        </p>
+                                    </div>
+                                )}
                                 {item.ocrResult && item.processedEvent && (
                                     <div>
                                         <p className="font-bold text-purple-600 dark:text-purple-400">{item.processedEvent.name}</p>

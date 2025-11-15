@@ -51,6 +51,7 @@ export interface UserProfile {
   recommendationHistory?: RecommendationHistoryItem[];
   allowEventAutoselection?: boolean;
   recommendationModel?: string;
+  isMonthLocked?: boolean; // New: To persist calendar lock state
 }
 
 export interface EventSlot {

@@ -1,3 +1,4 @@
+
 interface DayInfo {
   date: Date;
   isCurrentMonth: boolean;
@@ -54,14 +55,4 @@ export const getWeekDays = (date: Date): Date[] => {
         week.push(day);
     }
     return week;
-}
-
-export const getDayHours = (): string[] => {
-    const hours: string[] = [];
-    for (let i = 0; i < 24; i++) {
-        const date = new Date();
-        date.setHours(i, 0, 0, 0);
-        hours.push(date.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true }));
-    }
-    return hours;
 }

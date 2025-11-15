@@ -15,6 +15,8 @@ const SchedulePage: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedPathwayKey, setSelectedPathwayKey] = useState<string | null>(null);
   const [holidayModalInfo, setHolidayModalInfo] = useState<{ name: string; date: Date } | null>(null);
+  const [dayDetailModal, setDayDetailModal] = useState<{ isOpen: boolean; date: Date | null }>({ isOpen: false, date: null });
+
 
   const holidays = useMemo(() => getHolidays(currentDate.getFullYear()), [currentDate]);
 
@@ -238,9 +240,36 @@ const SchedulePage: React.FC = () => {
     // Otherwise, show the user's confirmed schedule.
     return confirmedCalendarEvents;
   }, [selectedPathwayKey, pathwayEvents, confirmedCalendarEvents]);
+  
+  const eventDays = useMemo(() => {
+    return new Set(eventsToDisplay.map(event => event.start.toISOString().split('T')[0]));
+  }, [eventsToDisplay]);
+
+  const eventsForModal = useMemo(() => {
+    if (!dayDetailModal.date) return [];
+    
+    const modalDate = dayDetailModal.date;
+    
+    // Create a UTC start and end for the clicked day
+    const modalDateStart = new Date(Date.UTC(modalDate.getFullYear(), modalDate.getMonth(), modalDate.getDate()));
+    const modalDateEnd = new Date(Date.UTC(modalDate.getFullYear(), modalDate.getMonth(), modalDate.getDate() + 1));
+
+    return eventsToDisplay.filter(event => {
+      const eventStart = event.start;
+      return eventStart >= modalDateStart && eventStart < modalDateEnd;
+    }).sort((a, b) => a.start.getTime() - b.start.getTime());
+  }, [dayDetailModal.date, eventsToDisplay]);
 
   const handleHolidayClick = (name: string, date: Date) => {
     setHolidayModalInfo({ name, date });
+  };
+
+  const handleDayClick = useCallback((date: Date) => {
+    setDayDetailModal({ isOpen: true, date });
+  }, []);
+
+  const handleCloseModal = () => {
+    setDayDetailModal({ isOpen: false, date: null });
   };
 
 
@@ -301,6 +330,8 @@ const SchedulePage: React.FC = () => {
       <div className="bg-white dark:bg-[#1a1625] p-4 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 print:shadow-none print:border-none print:p-0">
         <CalendarView 
           events={eventsToDisplay}
+          eventDays={eventDays}
+          onDayClick={handleDayClick}
           view={view}
           currentDate={currentDate}
           onSetCurrentDate={setCurrentDate}
@@ -308,6 +339,45 @@ const SchedulePage: React.FC = () => {
           onHolidayClick={handleHolidayClick}
         />
       </div>
+
+      {dayDetailModal.isOpen && dayDetailModal.date && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4" onClick={handleCloseModal}>
+          <div className="bg-white dark:bg-[#1a1625] rounded-lg shadow-xl w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                Events for {dayDetailModal.date.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
+              </h3>
+              <button 
+                onClick={handleCloseModal} 
+                className="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none text-2xl leading-none"
+                aria-label="Close"
+              >
+                &times;
+              </button>
+            </div>
+            <div className="max-h-[60vh] overflow-y-auto p-6 space-y-3">
+              {eventsForModal.length > 0 ? (
+                eventsForModal.map(event => (
+                  <div key={event.id} className={`p-3 rounded-md border-l-4 ${event.status === 'confirmed' ? 'bg-purple-50 dark:bg-purple-900/30 border-purple-500' : 'bg-green-50 dark:bg-green-900/30 border-green-500'}`}>
+                    <p className="font-semibold text-gray-800 dark:text-gray-200">{event.title}</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {event.start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: user.timeZone || 'UTC' })}
+                      {' - '}
+                      {event.end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: user.timeZone || 'UTC' })}
+                    </p>
+                    <p className={`text-xs font-bold uppercase mt-1 ${event.status === 'confirmed' ? 'text-purple-600 dark:text-purple-400' : 'text-green-600 dark:text-green-400'}`}>
+                      {event.status}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-gray-500 dark:text-gray-400 text-center py-4">No events scheduled for this day.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {holidayModalInfo && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4" onClick={() => setHolidayModalInfo(null)}>
           <div className="bg-white dark:bg-[#1a1625] rounded-lg shadow-xl w-full max-w-sm p-6 text-center" onClick={(e) => e.stopPropagation()}>

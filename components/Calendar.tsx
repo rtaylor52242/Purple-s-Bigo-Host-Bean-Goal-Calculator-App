@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useCallback } from 'react';
 
 interface CalendarProps {
@@ -7,6 +8,7 @@ interface CalendarProps {
   onMonthChange: (newDate: Date) => void;
   holidays?: Map<string, string>;
   onHolidayClick?: (name: string, date: Date) => void;
+  isMonthLocked?: boolean;
 }
 
 interface DayInfo {
@@ -14,7 +16,7 @@ interface DayInfo {
   isCurrentMonth: boolean;
 }
 
-const Calendar: React.FC<CalendarProps> = ({ selectedDates, onDatesChange, currentMonth, onMonthChange, holidays, onHolidayClick }) => {
+const Calendar: React.FC<CalendarProps> = ({ selectedDates, onDatesChange, currentMonth, onMonthChange, holidays, onHolidayClick, isMonthLocked = false }) => {
   const [lastClickedDate, setLastClickedDate] = useState<string | null>(null); // For shift-click range selection
 
   const getDaysInMonth = (date: Date): DayInfo[] => {
@@ -232,7 +234,8 @@ const Calendar: React.FC<CalendarProps> = ({ selectedDates, onDatesChange, curre
       <div className="flex justify-between items-center mb-4">
         <button
           onClick={goToPreviousMonth}
-          className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors"
+          disabled={isMonthLocked}
+          className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           aria-label="Previous Month"
         >
           &lt;
@@ -242,7 +245,8 @@ const Calendar: React.FC<CalendarProps> = ({ selectedDates, onDatesChange, curre
         </h3>
         <button
           onClick={goToNextMonth}
-          className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors"
+          disabled={isMonthLocked}
+          className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           aria-label="Next Month"
         >
           &gt;

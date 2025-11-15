@@ -28,6 +28,7 @@ const defaultInitialUser: UserProfile = {
   recommendationHistory: [],
   allowEventAutoselection: false,
   recommendationModel: 'gemini-2.5-pro',
+  isMonthLocked: true, // New: Default value for calendar lock
 };
 
 const initialEvents: Event[] = [];

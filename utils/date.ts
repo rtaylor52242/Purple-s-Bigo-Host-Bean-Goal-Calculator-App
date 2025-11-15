@@ -1,49 +1,74 @@
-export const parseEventDates = (datesStr: string): Date[] => {
-  const dates = new Set<string>(); // Use set to avoid duplicates
+export const parseEventDates = (datesStr: string): { validDates: Date[]; excludedPastDates: Date[] } => {
+  const allParsedDates = new Set<string>(); // Use set to avoid duplicates, stores YYYY-MM-DD ISO strings
   const currentYear = new Date().getFullYear();
 
   const dateRanges = datesStr.split(';').map(s => s.trim());
 
   dateRanges.forEach(range => {
+    if (!range) return;
     const parts = range.split('-');
-    const [startMonth, startDay] = parts[0].split('/');
+    const startPart = parts[0];
+    const [startMonthStr, startDayStr] = startPart.split('/');
     
-    if (!startMonth || !startDay) return;
+    if (!startMonthStr || !startDayStr) return;
+    
+    const startMonth = parseInt(startMonthStr, 10);
+    const startDay = parseInt(startDayStr, 10);
 
     let year = currentYear;
-    let startDate = new Date(Date.UTC(year, parseInt(startMonth) - 1, parseInt(startDay)));
     
-    const today = new Date();
-    today.setUTCHours(0,0,0,0);
+    if (isNaN(startMonth) || isNaN(startDay)) return;
 
-    // If date is in the past, assume next year
-    if (startDate < today) {
-        year = currentYear + 1;
-        startDate = new Date(Date.UTC(year, parseInt(startMonth) - 1, parseInt(startDay)));
-    }
+    let startDate = new Date(Date.UTC(year, startMonth - 1, startDay));
 
     if (parts.length === 1) { // Single date
-      dates.add(startDate.toISOString().split('T')[0]);
+      allParsedDates.add(startDate.toISOString().split('T')[0]);
     } else { // Date range
       const endPart = parts[1];
       const endParts = endPart.split('/');
-      const endDay = endParts[endParts[0].length > 2 ? endParts.length -1 : 0]; // If month isn't provided (e.g., 05/13-14), endParts[0] is day
-      const endMonth = endParts.length > 1 ? endParts[0] : startMonth;
       
-      let endDate = new Date(Date.UTC(year, parseInt(endMonth) - 1, parseInt(endDay)));
-      if (endDate < startDate) {
-          endDate.setUTCFullYear(year + 1);
+      const endDayStr = endParts[endParts.length - 1];
+      const endMonthStr = endParts.length > 1 ? endParts[0] : startMonthStr;
+      
+      const endMonth = parseInt(endMonthStr, 10);
+      const endDay = parseInt(endDayStr, 10);
+
+      if (isNaN(endMonth) || isNaN(endDay)) return;
+
+      let endYear = year;
+      // If the end month is before the start month (e.g., Dec-Jan), assume it's for the next year.
+      if (endMonth < startMonth) {
+        endYear = year + 1;
       }
+      
+      let endDate = new Date(Date.UTC(endYear, endMonth - 1, endDay));
 
       for (let d = new Date(startDate); d <= endDate; d.setUTCDate(d.getUTCDate() + 1)) {
-        dates.add(d.toISOString().split('T')[0]);
+        allParsedDates.add(d.toISOString().split('T')[0]);
       }
     }
   });
   
-  return Array.from(dates)
-    .map(d => new Date(d))
-    .sort((a,b) => a.getTime() - b.getTime());
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const todayISO = today.toISOString().split('T')[0];
+
+  const validDates: Date[] = [];
+  const excludedPastDates: Date[] = [];
+
+  Array.from(allParsedDates).forEach(isoDateStr => {
+    // Compare ISO strings directly to avoid timezone issues.
+    if (isoDateStr < todayISO) {
+      excludedPastDates.push(new Date(isoDateStr + 'T00:00:00Z'));
+    } else {
+      validDates.push(new Date(isoDateStr + 'T00:00:00Z'));
+    }
+  });
+  
+  validDates.sort((a,b) => a.getTime() - b.getTime());
+  excludedPastDates.sort((a,b) => a.getTime() - b.getTime());
+
+  return { validDates, excludedPastDates };
 };
 
 interface FormattedDateGroup {
