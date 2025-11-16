@@ -1,16 +1,68 @@
-
 import React, { useState, useMemo, useCallback } from 'react';
 import { useAppContext } from '../App';
 import CalendarView from '../components/CalendarView';
-import { CalendarEvent, Event, EventSlot, SlotPreference } from '../types';
+import { CalendarEvent, Event, EventSlot, SlotPreference, UserProfile } from '../types';
 import { getHolidays } from '../utils/holidays';
+import { getWeekDays } from '../utils/calendar';
 
 // This regex is designed to parse event lines from the AI-generated report.
 // It captures: 1. Event Name, 2. Date, 3. Time (12 or 24hr), 4. Duration
 const EVENT_LINE_REGEX = /- \s*(.+?)\s*\((\d{2}\/\d{2}\/\d{4})\)\s+at\s+([\d:]{3,5}\s*(?:AM|PM)?)\s+for\s+(\d+)\s*m/;
 
+const PrintableSchedule: React.FC<{ events: CalendarEvent[]; title: string; user: UserProfile; }> = ({ events, title, user }) => {
+  const groupedEvents = useMemo(() => {
+    const groups: { [key: string]: CalendarEvent[] } = {};
+    events.forEach(event => {
+      const dateKey = event.start.toISOString().split('T')[0];
+      if (!groups[dateKey]) {
+        groups[dateKey] = [];
+      }
+      groups[dateKey].push(event);
+    });
+    // Sort events within each group by start time
+    for (const key in groups) {
+      groups[key].sort((a, b) => a.start.getTime() - b.start.getTime());
+    }
+    return groups;
+  }, [events]);
+
+  const sortedDates = Object.keys(groupedEvents).sort();
+
+  return (
+    <div className="text-black">
+      <h1 className="text-3xl font-bold mb-4 text-center">{title}</h1>
+      <div className="space-y-6">
+        {sortedDates.map(dateKey => (
+          <div key={dateKey}>
+            <h2 className="text-xl font-semibold border-b border-gray-400 pb-2 mb-2">
+              {new Date(dateKey + 'T00:00:00Z').toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })}
+            </h2>
+            <ul className="space-y-2">
+              {groupedEvents[dateKey].map(event => (
+                <li key={event.id} className={`p-3 rounded-md border-l-4 bg-gray-50 ${event.status === 'confirmed' ? 'border-purple-500' : 'border-green-500'}`}>
+                  <p className="font-semibold">{event.title}</p>
+                  <p className="text-sm">
+                    {event.start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: user.timeZone || 'UTC' })}
+                    {' - '}
+                    {event.end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: user.timeZone || 'UTC' })}
+                  </p>
+                  <p className={`text-xs font-bold uppercase mt-1 ${event.status === 'confirmed' ? 'text-purple-600' : 'text-green-600'}`}>
+                    {event.status}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+        {events.length === 0 && <p className="text-center">No events to display.</p>}
+      </div>
+    </div>
+  );
+};
+
+
 const SchedulePage: React.FC = () => {
-  const { user, events, setUser } = useAppContext();
+  const { user, events, setEvents, setUser } = useAppContext();
   const [view, setView] = useState<'month' | 'week' | 'day'>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedPathwayKey, setSelectedPathwayKey] = useState<string | null>(null);
@@ -30,6 +82,92 @@ const SchedulePage: React.FC = () => {
     });
     return map;
   }, [events]);
+
+  const handleLoadSamples = () => {
+    if (!user.preferredDates || user.preferredDates.size === 0) {
+      alert("Please select some preferred dates on the 'Date Preferences' page first.");
+      return;
+    }
+
+    const newSampleEvents: Event[] = [];
+    const existingEventNames = new Set(events.map(e => e.name));
+    const allPreferredDates = Array.from(user.preferredDates);
+
+    // Step 1: Determine which new sample events need to be created.
+    for (const isoDate of allPreferredDates) {
+      const date = new Date(isoDate + 'T00:00:00Z');
+      const formattedDate = new Intl.DateTimeFormat('en-US', {
+        month: '2-digit',
+        day: '2-digit',
+        year: 'numeric',
+        timeZone: 'UTC'
+      }).format(date);
+      const eventName = `Sample Event (${formattedDate})`;
+
+      if (!existingEventNames.has(eventName)) {
+        newSampleEvents.push({
+          name: eventName,
+          eventDates: formattedDate,
+          rewardTiers: [
+            { level: 1, beans: 1000 },
+            { level: 2, beans: 2500 },
+            { level: 3, beans: 5000 },
+          ],
+          slots: [
+            { id: `${eventName}-1`, time: '09:00', duration: 60 },
+            { id: `${eventName}-2`, time: '14:00', duration: 60 },
+            { id: `${eventName}-3`, time: '19:00', duration: 60 },
+          ],
+        });
+      }
+    }
+
+    // Step 2: Update events state if new ones were created.
+    if (newSampleEvents.length > 0) {
+      setEvents(prevEvents => [...prevEvents, ...newSampleEvents].sort((a, b) => a.name.localeCompare(b.name)));
+    }
+
+    // Step 3: Update the user profile to select all slots for all relevant sample events (both new and existing).
+    setUser(prevUser => {
+      const newPreferredSlots = new Map<string, SlotPreference>(prevUser.preferredSlots);
+      
+      // We must use the events from context PLUS the new events we just created
+      // to ensure we can select slots from events that haven't been rendered yet.
+      const allRelevantEvents = [...events, ...newSampleEvents];
+
+      allPreferredDates.forEach(isoDate => {
+        const date = new Date(isoDate + 'T00:00:00Z');
+        const formattedDate = new Intl.DateTimeFormat('en-US', {
+          month: '2-digit',
+          day: '2-digit',
+          year: 'numeric',
+          timeZone: 'UTC'
+        }).format(date);
+        const eventName = `Sample Event (${formattedDate})`;
+
+        const targetEvent = allRelevantEvents.find(e => e.name === eventName);
+        if (targetEvent) {
+          targetEvent.slots.forEach(slot => {
+            const identifier = `${targetEvent.name}|${slot.time}|${slot.duration}`;
+            const highestTierIndex = targetEvent.rewardTiers.length - 1;
+            newPreferredSlots.set(identifier, {
+              isSelected: true,
+              rewardTierIndex: highestTierIndex,
+            });
+          });
+        }
+      });
+
+      return { ...prevUser, preferredSlots: newPreferredSlots };
+    });
+
+    // Step 4: Provide user feedback.
+    if (newSampleEvents.length > 0) {
+      alert(`${newSampleEvents.length} sample event(s) created and selected.`);
+    } else {
+      alert("Existing sample events for preferred dates have been selected.");
+    }
+  };
 
   const confirmedCalendarEvents = useMemo<CalendarEvent[]>(() => {
     const calendarEvents: CalendarEvent[] = [];
@@ -272,6 +410,22 @@ const SchedulePage: React.FC = () => {
     setDayDetailModal({ isOpen: false, date: null });
   };
 
+  const weekDays = useMemo(() => getWeekDays(currentDate), [currentDate]);
+
+  const headerTitle = useMemo(() => {
+      if (view === 'month') {
+          return currentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+      }
+      if (view === 'week') {
+          const start = weekDays[0];
+          const end = weekDays[6];
+          return `${start.toLocaleString('default', { month: 'short', day: 'numeric' })} - ${end.toLocaleString('default', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+      }
+      const title = currentDate.toLocaleString('default', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'});
+      const holidayName = holidays?.get(currentDate.toISOString().split('T')[0]);
+      return holidayName ? `${title} (${holidayName})` : title;
+  }, [view, currentDate, holidays, weekDays]);
+
 
   return (
     <div className="space-y-6">
@@ -291,6 +445,12 @@ const SchedulePage: React.FC = () => {
                     </button>
                 ))}
             </div>
+            <button
+              onClick={handleLoadSamples}
+              className="px-4 py-2 text-sm font-medium text-white bg-amber-500 rounded-md hover:bg-amber-600 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400"
+            >
+              Load Samples
+            </button>
              <button
               onClick={() => window.print()}
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -327,7 +487,7 @@ const SchedulePage: React.FC = () => {
         </div>
       </div>
       
-      <div className="bg-white dark:bg-[#1a1625] p-4 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 print:shadow-none print:border-none print:p-0">
+      <div className="bg-white dark:bg-[#1a1625] p-4 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 print:hidden">
         <CalendarView 
           events={eventsToDisplay}
           eventDays={eventDays}
@@ -338,6 +498,10 @@ const SchedulePage: React.FC = () => {
           holidays={holidays}
           onHolidayClick={handleHolidayClick}
         />
+      </div>
+
+      <div className="hidden print:block">
+        <PrintableSchedule events={eventsToDisplay} title={`Schedule for ${headerTitle}`} user={user} />
       </div>
 
       {dayDetailModal.isOpen && dayDetailModal.date && (

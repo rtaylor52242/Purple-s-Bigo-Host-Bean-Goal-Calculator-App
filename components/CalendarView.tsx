@@ -47,12 +47,12 @@ const CalendarView: React.FC<CalendarViewProps> = ({ events, eventDays, view, cu
   };
   
   const renderMonthView = () => (
-    <div className="grid grid-cols-7">
+    <div className="grid grid-cols-7 grid-rows-6 flex-grow">
         {monthGrid.map((day, index) => {
             const hasEvents = day.isCurrentMonth && eventDays.has(day.date.toISOString().split('T')[0]);
             const holidayName = holidays?.get(day.date.toISOString().split('T')[0]);
             return (
-                <div key={index} className={`border-r border-b border-gray-200 dark:border-gray-700 p-2 flex flex-col min-h-[100px] ${day.isCurrentMonth ? '' : 'bg-gray-50 dark:bg-gray-800/20'}`}>
+                <div key={index} className={`border-r border-b border-gray-200 dark:border-gray-700 p-2 flex flex-col ${day.isCurrentMonth ? '' : 'bg-gray-50 dark:bg-gray-800/20'}`}>
                     <span className={`relative font-medium ${isSameDay(day.date, today) ? 'text-purple-600 dark:text-purple-400 font-bold' : day.isCurrentMonth ? '' : 'text-gray-400 dark:text-gray-500'}`}>
                       {day.date.getDate()}
                       {holidayName && (
