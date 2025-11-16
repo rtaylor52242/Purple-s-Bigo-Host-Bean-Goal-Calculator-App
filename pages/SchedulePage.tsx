@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useCallback } from 'react';
 import { useAppContext } from '../App';
 import CalendarView from '../components/CalendarView';
@@ -8,12 +9,6 @@ import { getWeekDays } from '../utils/calendar';
 // This regex is designed to parse event lines from the AI-generated report.
 // It captures: 1. Event Name, 2. Date, 3. Time (12 or 24hr), 4. Duration
 const EVENT_LINE_REGEX = /- \s*(.+?)\s*\((\d{2}\/\d{2}\/\d{4})\)\s+at\s+([\d:]{3,5}\s*(?:AM|PM)?)\s+for\s+(\d+)\s*m/;
-
-const TrashIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-  </svg>
-);
 
 const SchedulePage: React.FC = () => {
   const { user, events, setEvents, setUser } = useAppContext();
@@ -122,6 +117,46 @@ const SchedulePage: React.FC = () => {
       alert("Existing sample events for preferred dates have been selected.");
     }
   };
+  
+  const hasSampleEvents = useMemo(() => events.some(event => event.name.startsWith('Sample Event')), [events]);
+
+  const handleUnloadSamples = useCallback(() => {
+    if (window.confirm('This will remove all events named "Sample Event" and clear them from your schedule. Are you sure?')) {
+      // 1. Remove the sample events from the global event list
+      setEvents(prevEvents => prevEvents.filter(event => !event.name.startsWith('Sample Event')));
+
+      // 2. Remove all slots associated with sample events from the user's profile
+      setUser(prevUser => {
+        const newPreferredSlots = new Map(prevUser.preferredSlots);
+        const keysToDelete: string[] = [];
+        for (const identifier of newPreferredSlots.keys()) {
+          if (identifier.startsWith('Sample Event')) {
+            keysToDelete.push(identifier);
+          }
+        }
+
+        if (keysToDelete.length > 0) {
+          keysToDelete.forEach(key => newPreferredSlots.delete(key));
+          return { ...prevUser, preferredSlots: newPreferredSlots };
+        }
+
+        return prevUser;
+      });
+      alert('Sample data has been unloaded.');
+    }
+  }, [setEvents, setUser]);
+  
+  const handleRemoveSlot = useCallback((slotIdentifier: string) => {
+    setUser(prevUser => {
+        const newPreferredSlots = new Map(prevUser.preferredSlots);
+        const currentPref = newPreferredSlots.get(slotIdentifier);
+        if (currentPref) {
+            newPreferredSlots.set(slotIdentifier, { ...currentPref, isSelected: false });
+        }
+        return { ...prevUser, preferredSlots: newPreferredSlots };
+    });
+  }, [setUser]);
+
 
   const confirmedCalendarEvents = useMemo<CalendarEvent[]>(() => {
     const calendarEvents: CalendarEvent[] = [];
@@ -324,20 +359,6 @@ const SchedulePage: React.FC = () => {
 
   }, [pathwaySlotsToSelect, setUser]);
 
-  const handleDeleteEventSlot = useCallback((slotIdentifier: string) => {
-    if (window.confirm("Are you sure you want to remove this event from your schedule? This will unselect it from your preferences.")) {
-        setUser(prevUser => {
-            const newPreferredSlots = new Map<string, SlotPreference>(prevUser.preferredSlots);
-            const slotPref = newPreferredSlots.get(slotIdentifier);
-            if (slotPref) {
-                // By setting isSelected to false, we are deselecting it
-                newPreferredSlots.set(slotIdentifier, { ...slotPref, isSelected: false });
-            }
-            return { ...prevUser, preferredSlots: newPreferredSlots };
-        });
-    }
-  }, [setUser]);
-
   const eventsToDisplay = useMemo(() => {
     // If a pathway is selected, show ONLY the events from that pathway.
     if (selectedPathwayKey) {
@@ -413,12 +434,22 @@ const SchedulePage: React.FC = () => {
                     </button>
                 ))}
             </div>
-            <button
-              onClick={handleLoadSamples}
-              className="px-4 py-2 text-sm font-medium text-white bg-amber-500 rounded-md hover:bg-amber-600 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400"
-            >
-              Load Samples
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleLoadSamples}
+                className="px-4 py-2 text-sm font-medium text-white bg-amber-500 rounded-md hover:bg-amber-600 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400"
+              >
+                Load Samples
+              </button>
+              {hasSampleEvents && (
+                 <button
+                  onClick={handleUnloadSamples}
+                  className="px-4 py-2 text-sm font-medium text-white bg-red-500 rounded-md hover:bg-red-600 transition-colors focus:outline-none focus:ring-2 focus:ring-red-400"
+                >
+                  Unload Samples
+                </button>
+              )}
+            </div>
         </div>
       </div>
 
@@ -492,15 +523,15 @@ const SchedulePage: React.FC = () => {
                         {event.status}
                       </p>
                     </div>
-                     {event.status === 'confirmed' && (
-                        <button
-                          onClick={() => handleDeleteEventSlot(event.id)}
-                          className="p-2 rounded-full text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50"
-                          aria-label={`Delete event ${event.title}`}
-                        >
-                          <TrashIcon />
-                        </button>
-                      )}
+                    {event.status === 'confirmed' && (
+                      <button
+                        onClick={() => handleRemoveSlot(event.id)}
+                        className="px-3 py-1 text-xs font-medium text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/50 rounded-md hover:bg-red-200 dark:hover:bg-red-800 transition-colors"
+                        aria-label={`Remove ${event.title}`}
+                      >
+                        Remove
+                      </button>
+                    )}
                   </div>
                 ))
               ) : (

@@ -20,10 +20,10 @@ const AdminToolsPage: React.FC = () => {
     }));
   }, [setUser]);
 
-  const handleDeleteSelectedDateGroup = useCallback((datesToDelete: string[]) => {
+  const handleDateDelete = useCallback((dateToDelete: string) => {
     setUser(prevUser => {
       const newPreferredDates = new Set(prevUser.preferredDates || []);
-      datesToDelete.forEach(dateIso => newPreferredDates.delete(dateIso));
+      newPreferredDates.delete(dateToDelete);
       return { ...prevUser, preferredDates: newPreferredDates };
     });
   }, [setUser]);
@@ -46,11 +46,10 @@ const AdminToolsPage: React.FC = () => {
       setCurrentCalendarMonth(new Date());
     }
   }, [user.isMonthLocked, setUser]);
-
-  const formattedSelectedDates = formatSelectedDatesForDisplay(user.preferredDates || new Set());
   
-  const uniqueDaysCount = useMemo(() => {
-    return user.preferredDates?.size || 0;
+  const sortedPreferredDates = useMemo(() => {
+    if (!user.preferredDates) return [];
+    return Array.from(user.preferredDates).sort();
   }, [user.preferredDates]);
 
   return (
@@ -94,31 +93,35 @@ const AdminToolsPage: React.FC = () => {
               <label htmlFor="selected-dates-display" className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Selected Preferred Dates:</label>
               <div className="mb-2">
                 <span className="text-sm font-medium text-purple-600 dark:text-purple-400 bg-purple-100 dark:bg-purple-900/50 px-2.5 py-1 rounded-full">
-                  Total Unique Days: {uniqueDaysCount}
+                  Total Unique Days: {sortedPreferredDates.length}
                 </span>
               </div>
               <div 
                 id="selected-dates-display" 
-                className="flex-grow w-full bg-gray-100 dark:bg-[#2a233a] border border-gray-300 dark:border-gray-600 rounded-md py-2 px-3 text-gray-900 dark:text-white overflow-y-auto"
+                className="flex-grow w-full bg-gray-100 dark:bg-[#2a233a] border border-gray-300 dark:border-gray-600 rounded-md p-2 text-gray-900 dark:text-white overflow-y-auto"
                 aria-label="Selected dates from calendar"
               >
-                {formattedSelectedDates.length > 0 ? (
-                  formattedSelectedDates.map(group => (
-                    <div key={group.id} className="flex items-center justify-between text-sm py-1">
-                      <span>{group.displayString}</span>
-                      <button 
-                        onClick={() => handleDeleteSelectedDateGroup(group.datesInGroup)}
-                        className="ml-2 p-1 rounded-full text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50"
-                        aria-label={`Delete ${group.displayString}`}
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
-                  ))
+                {sortedPreferredDates.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {sortedPreferredDates.map(isoDate => {
+                       const date = new Date(isoDate + 'T00:00:00Z');
+                       const formattedDate = date.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric', timeZone: 'UTC' });
+                       return (
+                        <div key={isoDate} className="flex items-center bg-purple-200 dark:bg-purple-800 text-purple-800 dark:text-purple-100 text-sm font-medium pl-3 pr-2 py-1 rounded-full">
+                          <span>{formattedDate}</span>
+                          <button 
+                            onClick={() => handleDateDelete(isoDate)}
+                            className="ml-2 w-4 h-4 flex items-center justify-center rounded-full text-purple-600 dark:text-purple-200 hover:bg-purple-300 dark:hover:bg-purple-700"
+                            aria-label={`Delete ${formattedDate}`}
+                          >
+                            &times;
+                          </button>
+                        </div>
+                       )
+                    })}
+                  </div>
                 ) : (
-                  <p className="text-gray-400 dark:text-gray-500">No dates selected.</p>
+                  <p className="text-gray-400 dark:text-gray-500 p-2">No dates selected.</p>
                 )}
               </div>
             </div>
