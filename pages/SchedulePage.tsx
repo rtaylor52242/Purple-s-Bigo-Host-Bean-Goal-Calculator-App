@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useCallback } from 'react';
 import { useAppContext } from '../App';
 import CalendarView from '../components/CalendarView';
@@ -117,34 +116,6 @@ const SchedulePage: React.FC = () => {
       alert("Existing sample events for preferred dates have been selected.");
     }
   };
-  
-  const hasSampleEvents = useMemo(() => events.some(event => event.name.startsWith('Sample Event')), [events]);
-
-  const handleUnloadSamples = useCallback(() => {
-    if (window.confirm('This will remove all events named "Sample Event" and clear them from your schedule. Are you sure?')) {
-      // 1. Remove the sample events from the global event list
-      setEvents(prevEvents => prevEvents.filter(event => !event.name.startsWith('Sample Event')));
-
-      // 2. Remove all slots associated with sample events from the user's profile
-      setUser(prevUser => {
-        const newPreferredSlots = new Map(prevUser.preferredSlots);
-        const keysToDelete: string[] = [];
-        for (const identifier of newPreferredSlots.keys()) {
-          if (identifier.startsWith('Sample Event')) {
-            keysToDelete.push(identifier);
-          }
-        }
-
-        if (keysToDelete.length > 0) {
-          keysToDelete.forEach(key => newPreferredSlots.delete(key));
-          return { ...prevUser, preferredSlots: newPreferredSlots };
-        }
-
-        return prevUser;
-      });
-      alert('Sample data has been unloaded.');
-    }
-  }, [setEvents, setUser]);
   
   const handleRemoveSlot = useCallback((slotIdentifier: string) => {
     setUser(prevUser => {
@@ -441,14 +412,6 @@ const SchedulePage: React.FC = () => {
               >
                 Load Samples
               </button>
-              {hasSampleEvents && (
-                 <button
-                  onClick={handleUnloadSamples}
-                  className="px-4 py-2 text-sm font-medium text-white bg-red-500 rounded-md hover:bg-red-600 transition-colors focus:outline-none focus:ring-2 focus:ring-red-400"
-                >
-                  Unload Samples
-                </button>
-              )}
             </div>
         </div>
       </div>
