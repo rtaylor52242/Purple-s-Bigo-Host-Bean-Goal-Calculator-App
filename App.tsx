@@ -26,6 +26,7 @@ const defaultInitialUser: UserProfile = {
   currentForeignBeanCount: 0, // Re-added
   preferredDates: new Set<string>(), // Re-added
   recommendationHistory: [],
+  samplePathways: [],
   allowEventAutoselection: false,
   recommendationModel: 'gemini-2.5-pro',
   isMonthLocked: true, // New: Default value for calendar lock
@@ -60,6 +61,10 @@ const loadUserProfileFromLocalStorage = (): UserProfile => {
         parsedUser.preferredDates = new Set(parsedUser.preferredDates);
       } else {
         parsedUser.preferredDates = new Set();
+      }
+      // Ensure samplePathways is an array
+      if (!parsedUser.samplePathways || !Array.isArray(parsedUser.samplePathways)) {
+        parsedUser.samplePathways = [];
       }
       // Merge with default to ensure all fields are present, especially new ones
       return { ...defaultInitialUser, ...parsedUser };

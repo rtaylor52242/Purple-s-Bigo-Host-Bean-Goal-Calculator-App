@@ -1,5 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../App';
 import { UserProfile, Event, EventSlot, SlotPreference, RecommendationHistoryItem } from '../types';
 import { formatTime } from '../utils/time';
@@ -9,6 +10,7 @@ import { generateGoalPathways } from '../services/geminiService';
 
 const SettingsPage: React.FC = () => {
   const { user, setUser, events, regionalTiers } = useAppContext();
+  const navigate = useNavigate();
   const [maxPathwaysError, setMaxPathwaysError] = useState('');
   const [isBigoIdLocked, setIsBigoIdLocked] = useState(true);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
@@ -334,6 +336,11 @@ const SettingsPage: React.FC = () => {
     }, 3000);
   };
   
+  const handleConfirmAndGoToCalendar = () => {
+    handleSaveSettings();
+    navigate('/calendar');
+  };
+
   const handleProcessRecommendations = async () => {
     setIsGenerating(true);
     setRecommendationError(null);
@@ -845,6 +852,13 @@ const SettingsPage: React.FC = () => {
               </button>
               <button onClick={handleClearAll} className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500" disabled={sortedSelectedSlots.length === 0}>
                 Remove All
+              </button>
+              <button 
+                onClick={handleConfirmAndGoToCalendar}
+                className="px-4 py-2 text-sm font-medium text-white bg-teal-600 rounded-md hover:bg-teal-700 transition-colors focus:outline-none focus:ring-2 focus:ring-teal-500"
+                disabled={sortedSelectedSlots.length === 0}
+              >
+                View on Calendar
               </button>
             </div>
 

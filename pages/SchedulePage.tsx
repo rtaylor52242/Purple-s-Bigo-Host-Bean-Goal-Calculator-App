@@ -1,13 +1,14 @@
+
 import React, { useState, useMemo, useCallback } from 'react';
 import { useAppContext } from '../App';
 import CalendarView from '../components/CalendarView';
-import { CalendarEvent, Event, EventSlot, SlotPreference, UserProfile } from '../types';
+import { CalendarEvent, Event, EventSlot, SlotPreference, UserProfile, SamplePathway } from '../types';
 import { getHolidays } from '../utils/holidays';
 import { getWeekDays } from '../utils/calendar';
 
 // This regex is designed to parse event lines from the AI-generated report.
 // It captures: 1. Event Name, 2. Date, 3. Time (12 or 24hr), 4. Duration
-const EVENT_LINE_REGEX = /- \s*(.+?)\s*\((\d{2}\/\d{2}\/\d{4})\)\s+at\s+([\d:]{3,5}\s*(?:AM|PM)?)\s+for\s+(\d+)\s*m/;
+const EVENT_LINE_REGEX = /- \s*([^()]+?)\s*\((\d{2}\/\d{2}\/\d{4})\)\s+at\s+([\d:]{3,5}\s*(?:AM|PM)?)\s+for\s+(\d+)\s*m/;
 
 const SchedulePage: React.FC = () => {
   const { user, events, setEvents, setUser } = useAppContext();
@@ -40,6 +41,7 @@ const SchedulePage: React.FC = () => {
     const newSampleEvents: Event[] = [];
     const existingEventNames = new Set(events.map(e => e.name));
     const allPreferredDates = Array.from(user.preferredDates);
+    const sampleEventSlotIdentifiers: string[] = [];
 
     // Step 1: Determine which new sample events need to be created.
     for (const isoDate of allPreferredDates) {
@@ -53,7 +55,7 @@ const SchedulePage: React.FC = () => {
       const eventName = `Sample Event (${formattedDate})`;
 
       if (!existingEventNames.has(eventName)) {
-        newSampleEvents.push({
+        const createdEvent: Event = {
           name: eventName,
           eventDates: formattedDate,
           rewardTiers: [
@@ -66,63 +68,84 @@ const SchedulePage: React.FC = () => {
             { id: `${eventName}-2`, time: '14:00', duration: 60 },
             { id: `${eventName}-3`, time: '19:00', duration: 60 },
           ],
-        });
+        };
+        newSampleEvents.push(createdEvent);
       }
     }
 
-    // Step 2: Update events state if new ones were created.
-    if (newSampleEvents.length > 0) {
-      setEvents(prevEvents => [...prevEvents, ...newSampleEvents].sort((a, b) => a.name.localeCompare(b.name)));
+    const allRelevantEvents = events.concat(newSampleEvents);
+
+    // Find all identifiers for sample events on preferred dates
+    allPreferredDates.forEach(isoDate => {
+      const date = new Date(isoDate + 'T00:00:00Z');
+      const formattedDate = new Intl.DateTimeFormat('en-US', {
+        month: '2-digit',
+        day: '2-digit',
+        year: 'numeric',
+        timeZone: 'UTC'
+      }).format(date);
+      const eventName = `Sample Event (${formattedDate})`;
+
+      const targetEvent = allRelevantEvents.find(e => e.name === eventName);
+      if (targetEvent) {
+        targetEvent.slots.forEach(slot => {
+          const identifier = `${targetEvent.name}|${slot.time}|${slot.duration}`;
+          sampleEventSlotIdentifiers.push(identifier);
+        });
+      }
+    });
+
+    if (sampleEventSlotIdentifiers.length === 0) {
+      alert("No new sample events to load or select.");
+      return;
     }
 
-    // Step 3: Update the user profile to select all slots for all relevant sample events (both new and existing).
+    // Create the new pathway
+    const newPathway: SamplePathway = {
+      id: new Date().toISOString(),
+      name: `Sample Pathway ${(user.samplePathways?.length || 0) + 1}`,
+      eventIdentifiers: sampleEventSlotIdentifiers
+    };
+
+    // Update events state if new ones were created.
+    if (newSampleEvents.length > 0) {
+      setEvents(prevEvents => (prevEvents || []).concat(newSampleEvents).sort((a, b) => a.name.localeCompare(b.name)));
+    }
+
+    // Update the user profile to select slots and add pathway.
     setUser(prevUser => {
       const newPreferredSlots = new Map<string, SlotPreference>(prevUser.preferredSlots);
-      
-      // We must use the events from context PLUS the new events we just created
-      // to ensure we can select slots from events that haven't been rendered yet.
-      const allRelevantEvents = [...events, ...newSampleEvents];
+      const newSamplePathways = (prevUser.samplePathways || []).concat(newPathway);
 
-      allPreferredDates.forEach(isoDate => {
-        const date = new Date(isoDate + 'T00:00:00Z');
-        const formattedDate = new Intl.DateTimeFormat('en-US', {
-          month: '2-digit',
-          day: '2-digit',
-          year: 'numeric',
-          timeZone: 'UTC'
-        }).format(date);
-        const eventName = `Sample Event (${formattedDate})`;
-
+      sampleEventSlotIdentifiers.forEach(identifier => {
+        const [eventName] = identifier.split('|');
         const targetEvent = allRelevantEvents.find(e => e.name === eventName);
         if (targetEvent) {
-          targetEvent.slots.forEach(slot => {
-            const identifier = `${targetEvent.name}|${slot.time}|${slot.duration}`;
             const highestTierIndex = targetEvent.rewardTiers.length - 1;
             newPreferredSlots.set(identifier, {
               isSelected: true,
               rewardTierIndex: highestTierIndex,
             });
-          });
         }
       });
-
-      return { ...prevUser, preferredSlots: newPreferredSlots };
+      
+      const updatedUser = Object.assign({}, prevUser, { preferredSlots: newPreferredSlots, samplePathways: newSamplePathways });
+      return updatedUser;
     });
 
-    // Step 4: Provide user feedback.
-    if (newSampleEvents.length > 0) {
-      alert(`${newSampleEvents.length} sample event(s) created and selected.`);
-    } else {
-      alert("Existing sample events for preferred dates have been selected.");
-    }
+    // Provide user feedback.
+    alert(`'${newPathway.name}' created with ${sampleEventSlotIdentifiers.length} sample events.`);
   };
   
   const handleRemoveSlot = useCallback((slotIdentifier: string) => {
     setUser(prevUser => {
-        const newPreferredSlots = new Map(prevUser.preferredSlots);
+        const newPreferredSlots = new Map<string, SlotPreference>(prevUser.preferredSlots);
         const currentPref = newPreferredSlots.get(slotIdentifier);
         if (currentPref) {
-            newPreferredSlots.set(slotIdentifier, { ...currentPref, isSelected: false });
+            newPreferredSlots.set(slotIdentifier, { 
+                isSelected: false, 
+                rewardTierIndex: currentPref.rewardTierIndex 
+            });
         }
         return { ...prevUser, preferredSlots: newPreferredSlots };
     });
@@ -182,33 +205,80 @@ const SchedulePage: React.FC = () => {
   }, [user.preferredSlots, slotDetailsMap]);
 
   const pathwayOptions = useMemo(() => {
-    if (!user.recommendationHistory) return [];
-    
     const options: { key: string; label: string }[] = [];
-    user.recommendationHistory.forEach(item => {
-        const report = item.report;
-        const pathwayTitles = report.match(/\*\*(.*?Pathway.*?)\*\*/g);
-        
-        if (pathwayTitles) {
-            pathwayTitles.forEach((titleWithStars) => {
-                const cleanTitle = titleWithStars.replace(/\*\*/g, '');
-                options.push({
-                    key: `${item.id}|${cleanTitle}`,
-                    label: `(${new Date(item.date).toLocaleDateString()}) ${cleanTitle}`
-                });
-            });
-        }
-    });
+    
+    if (user.samplePathways) {
+      user.samplePathways.forEach(pathway => {
+        options.push({
+          key: `sample-${pathway.id}`,
+          label: pathway.name
+        });
+      });
+    }
+
+    if (user.recommendationHistory) {
+      user.recommendationHistory.forEach(item => {
+          const report = item.report;
+          const pathwayTitles = report.match(/\*\*(.*?Pathway.*?)\*\*/g);
+          
+          if (pathwayTitles) {
+              pathwayTitles.forEach((titleWithStars) => {
+                  const cleanTitle = titleWithStars.replace(/\*\*/g, '');
+                  options.push({
+                      key: `rec-${item.id}|${cleanTitle}`,
+                      label: `(${new Date(item.date).toLocaleDateString()}) ${cleanTitle}`
+                  });
+              });
+          }
+      });
+    }
+
     return options;
-  }, [user.recommendationHistory]);
+  }, [user.recommendationHistory, user.samplePathways]);
 
 
   const pathwayEvents = useMemo(() => {
     if (!selectedPathwayKey) return [];
+    
+    if (selectedPathwayKey.startsWith('sample-')) {
+        const pathwayId = selectedPathwayKey.substring('sample-'.length);
+        const pathway = user.samplePathways?.find(p => p.id === pathwayId);
+        if (!pathway) return [];
 
-    const [historyId, pathwayTitle] = selectedPathwayKey.split('|');
+        const calendarEvents: CalendarEvent[] = [];
+        pathway.eventIdentifiers.forEach(identifier => {
+            const details = slotDetailsMap.get(identifier);
+            if (details) {
+                const { event, slot } = details;
+                const dateMatch = event.name.match(/\((\d{2}\/\d{2}\/\d{4})\)/);
+                if (dateMatch?.[1]) {
+                    const [month, day, year] = dateMatch[1].split('/');
+                    const [hours, minutes] = slot.time.split(':').map(Number);
+                    if (isNaN(hours) || isNaN(minutes)) return;
+                    const start = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day), hours, minutes));
+                    if (isNaN(start.getTime())) return;
+                    const end = new Date(start.getTime() + slot.duration * 60000);
+
+                    calendarEvents.push({
+                        id: identifier,
+                        title: event.name.split('(')[0].trim(),
+                        start,
+                        end,
+                        status: 'preview',
+                    });
+                }
+            }
+        });
+        return calendarEvents;
+
+    }
+
+    // Fallback to recommendation pathway logic
+    const [historyId, pathwayTitle] = selectedPathwayKey.startsWith('rec-') 
+      ? selectedPathwayKey.substring('rec-'.length).split('|') 
+      : selectedPathwayKey.split('|');
+
     if (!historyId || !pathwayTitle) return [];
-
     const selectedHistoryItem = user.recommendationHistory?.find(h => h.id === historyId);
     if (!selectedHistoryItem) return [];
 
@@ -234,7 +304,6 @@ const SchedulePage: React.FC = () => {
     }
     const pathwayContent = report.substring(startIndex, endIndex);
 
-
     const parsedEvents: CalendarEvent[] = [];
     const lines = pathwayContent.split('\n');
 
@@ -244,57 +313,31 @@ const SchedulePage: React.FC = () => {
         const [, eventName, dateStr, timeStr, durationStr] = match;
         const [month, day, year] = dateStr.split('/');
         const duration = parseInt(durationStr, 10);
-
-        let hours = NaN;
-        let minutes = NaN;
-        
+        let hours = NaN, minutes = NaN;
         const cleanedTime = timeStr.replace(/(AM|PM)/i, '').trim();
-
         if (cleanedTime.includes(':')) {
             const timeParts = cleanedTime.split(':');
             hours = parseInt(timeParts[0], 10);
             minutes = parseInt(timeParts[1] || '0', 10);
-        } else if (cleanedTime.length >= 3) {
-            hours = parseInt(cleanedTime.slice(0, -2), 10);
-            minutes = parseInt(cleanedTime.slice(-2), 10);
         }
+        if (isNaN(duration) || isNaN(hours) || isNaN(minutes)) continue;
 
-        if (isNaN(duration) || isNaN(hours) || isNaN(minutes) || isNaN(parseInt(year)) || isNaN(parseInt(month)) || isNaN(parseInt(day))) {
-            console.warn(`Skipping event line due to parsing error: ${line}`);
-            continue;
-        }
-
-        if (/PM/i.test(timeStr) && hours < 12) {
-            hours += 12;
-        }
-        if (/AM/i.test(timeStr) && hours === 12) {
-            hours = 0;
-        }
+        if (/PM/i.test(timeStr) && hours < 12) hours += 12;
+        if (/AM/i.test(timeStr) && hours === 12) hours = 0;
         
         const start = new Date(Date.UTC(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10), hours, minutes));
-
-        if (isNaN(start.getTime())) {
-            console.warn(`Skipping event line due to invalid date creation: ${line}`);
-            continue;
-        }
+        if (isNaN(start.getTime())) continue;
 
         const end = new Date(start.getTime() + duration * 60000);
         const time24hr = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
-        
         const fullEventName = `${eventName.trim()} (${dateStr})`;
         const identifier = `${fullEventName}|${time24hr}|${duration}`;
 
-        parsedEvents.push({
-          id: identifier,
-          title: eventName.trim(),
-          start,
-          end,
-          status: 'preview'
-        });
+        parsedEvents.push({ id: identifier, title: eventName.trim(), start, end, status: 'preview' });
       }
     }
     return parsedEvents;
-  }, [selectedPathwayKey, user.recommendationHistory]);
+  }, [selectedPathwayKey, user.recommendationHistory, user.samplePathways, slotDetailsMap]);
   
   const pathwaySlotsToSelect = useMemo(() => {
     const slotsToSelect = new Map<string, SlotPreference>();
@@ -318,11 +361,13 @@ const SchedulePage: React.FC = () => {
     }
     
     setUser(prevUser => {
-        const newPreferredSlots = new Map<string, SlotPreference>(prevUser.preferredSlots);
+        const intermediateUser = { ...prevUser };
+        const newPreferredSlots = new Map<string, SlotPreference>(intermediateUser.preferredSlots);
         pathwaySlotsToSelect.forEach((pref, identifier) => {
             newPreferredSlots.set(identifier, pref);
         });
-        return { ...prevUser, preferredSlots: newPreferredSlots };
+        intermediateUser.preferredSlots = newPreferredSlots;
+        return intermediateUser;
     });
 
     alert(`${pathwaySlotsToSelect.size} event(s) from the selected pathway have been added to your selections!`);
@@ -331,11 +376,9 @@ const SchedulePage: React.FC = () => {
   }, [pathwaySlotsToSelect, setUser]);
 
   const eventsToDisplay = useMemo(() => {
-    // If a pathway is selected, show ONLY the events from that pathway.
     if (selectedPathwayKey) {
       return pathwayEvents;
     }
-    // Otherwise, show the user's confirmed schedule.
     return confirmedCalendarEvents;
   }, [selectedPathwayKey, pathwayEvents, confirmedCalendarEvents]);
   
@@ -345,17 +388,10 @@ const SchedulePage: React.FC = () => {
 
   const eventsForModal = useMemo(() => {
     if (!dayDetailModal.date) return [];
-    
     const modalDate = dayDetailModal.date;
-    
-    // Create a UTC start and end for the clicked day
     const modalDateStart = new Date(Date.UTC(modalDate.getFullYear(), modalDate.getMonth(), modalDate.getDate()));
     const modalDateEnd = new Date(Date.UTC(modalDate.getFullYear(), modalDate.getMonth(), modalDate.getDate() + 1));
-
-    return eventsToDisplay.filter(event => {
-      const eventStart = event.start;
-      return eventStart >= modalDateStart && eventStart < modalDateEnd;
-    }).sort((a, b) => a.start.getTime() - b.start.getTime());
+    return eventsToDisplay.filter(event => event.start >= modalDateStart && event.start < modalDateEnd).sort((a, b) => a.start.getTime() - b.start.getTime());
   }, [dayDetailModal.date, eventsToDisplay]);
 
   const handleHolidayClick = (name: string, date: Date) => {
@@ -366,26 +402,38 @@ const SchedulePage: React.FC = () => {
     setDayDetailModal({ isOpen: true, date });
   }, []);
 
-  const handleCloseModal = () => {
+  const handleCloseModal = useCallback(() => {
     setDayDetailModal({ isOpen: false, date: null });
-  };
+  }, []);
+
+  const handleRemoveAllSlotsForDay = useCallback(() => {
+    if (!dayDetailModal.date) return;
+    
+    const confirmedEventsOnDay = eventsForModal.filter(e => e.status === 'confirmed');
+    if (confirmedEventsOnDay.length === 0) {
+      alert("No confirmed events to remove for this day.");
+      return;
+    }
+
+    if (window.confirm(`Are you sure you want to remove all ${confirmedEventsOnDay.length} confirmed event(s) from this day's schedule?`)) {
+      setUser(prevUser => {
+        const newPreferredSlots = new Map<string, SlotPreference>(prevUser.preferredSlots);
+        confirmedEventsOnDay.forEach(event => {
+          const pref = newPreferredSlots.get(event.id);
+          if (pref) {
+            newPreferredSlots.set(event.id, { 
+                isSelected: false, 
+                rewardTierIndex: pref.rewardTierIndex
+            });
+          }
+        });
+        return Object.assign({}, prevUser, { preferredSlots: newPreferredSlots });
+      });
+      handleCloseModal();
+    }
+  }, [dayDetailModal.date, eventsForModal, setUser, handleCloseModal]);
 
   const weekDays = useMemo(() => getWeekDays(currentDate), [currentDate]);
-
-  const headerTitle = useMemo(() => {
-      if (view === 'month') {
-          return currentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
-      }
-      if (view === 'week') {
-          const start = weekDays[0];
-          const end = weekDays[6];
-          return `${start.toLocaleString('default', { month: 'short', day: 'numeric' })} - ${end.toLocaleString('default', { month: 'short', day: 'numeric', year: 'numeric' })}`;
-      }
-      const title = currentDate.toLocaleString('default', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'});
-      const holidayName = holidays?.get(currentDate.toISOString().split('T')[0]);
-      return holidayName ? `${title} (${holidayName})` : title;
-  }, [view, currentDate, holidays, weekDays]);
-
 
   return (
     <div className="space-y-6">
@@ -500,6 +548,22 @@ const SchedulePage: React.FC = () => {
               ) : (
                 <p className="text-gray-500 dark:text-gray-400 text-center py-4">No events scheduled for this day.</p>
               )}
+            </div>
+            <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+                {eventsForModal.some(e => e.status === 'confirmed') && (
+                    <button
+                        onClick={handleRemoveAllSlotsForDay}
+                        className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+                    >
+                        Remove All Confirmed
+                    </button>
+                )}
+                <button
+                    onClick={handleCloseModal}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-200 dark:bg-gray-600 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-400"
+                >
+                    Close
+                </button>
             </div>
           </div>
         </div>

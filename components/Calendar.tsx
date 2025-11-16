@@ -131,7 +131,6 @@ const Calendar: React.FC<CalendarProps> = ({ selectedDates, onDatesChange, curre
       .map(day => day.date.toISOString().split('T')[0]);
   }, [daysInCalendar]);
 
-  // FIX: This function now correctly gets the *actual* current week based on today's date, not the displayed month.
   const getDaysForActualCurrentWeek = useCallback((): string[] => {
     const today = new Date();
     const startOfWeek = new Date(today);
@@ -177,7 +176,14 @@ const Calendar: React.FC<CalendarProps> = ({ selectedDates, onDatesChange, curre
     handleToggleSelection(getCurrentMonthOnlyDays(), 'month');
   }, [getCurrentMonthOnlyDays, handleToggleSelection]);
 
-  // FIX: This handler now uses the corrected function to select the actual current week.
+  const handleClearMonthSelection = useCallback(() => {
+    const newSelectedDates = new Set(selectedDates);
+    const currentMonthDays = getCurrentMonthOnlyDays();
+    currentMonthDays.forEach(dateIso => newSelectedDates.delete(dateIso));
+    onDatesChange(newSelectedDates);
+    setLastClickedDate(null);
+  }, [selectedDates, getCurrentMonthOnlyDays, onDatesChange]);
+
   const handleToggleCurrentWeekSelection = useCallback(() => {
     const fullWeekDaysIso = getDaysForActualCurrentWeek();
     handleToggleSelection(fullWeekDaysIso, 'week');
@@ -211,7 +217,6 @@ const Calendar: React.FC<CalendarProps> = ({ selectedDates, onDatesChange, curre
   const currentMonthDaysOnly = getCurrentMonthOnlyDays();
   const allCurrentMonthDaysSelected = currentMonthDaysOnly.length > 0 && currentMonthDaysOnly.every(day => selectedDates.has(day));
 
-  // FIX: Logic updated to check against the *actual* current week.
   const currentWeekDays = useMemo(() => getDaysForActualCurrentWeek(), [getDaysForActualCurrentWeek]);
   const allCurrentWeekDaysSelected = currentWeekDays.length > 0 && currentWeekDays.every(day => selectedDates.has(day));
 
@@ -223,7 +228,6 @@ const Calendar: React.FC<CalendarProps> = ({ selectedDates, onDatesChange, curre
   const weekdaysInMonth = getDaysForWeekdaysInMonth();
   const allWeekdaysInMonthSelected = weekdaysInMonth.length > 0 && weekdaysInMonth.every(day => selectedDates.has(day));
   
-  // FIX: Add check to see if the calendar is currently showing the actual current month.
   const isViewingCurrentMonth = useMemo(() => {
     const today = new Date();
     return currentMonth.getMonth() === today.getMonth() && currentMonth.getFullYear() === today.getFullYear();
@@ -240,7 +244,7 @@ const Calendar: React.FC<CalendarProps> = ({ selectedDates, onDatesChange, curre
         >
           &lt;
         </button>
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white w-40 text-center"> {/* Added fixed width for alignment */}
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white w-40 text-center">
           {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
         </h3>
         <button
@@ -254,16 +258,25 @@ const Calendar: React.FC<CalendarProps> = ({ selectedDates, onDatesChange, curre
       </div>
       
       <div className="mb-4 space-y-2">
-        <button
-          onClick={handleToggleMonthSelection}
-          className="w-full bg-purple-100 dark:bg-purple-800 text-purple-700 dark:text-white py-2 rounded-md hover:bg-purple-200 dark:hover:bg-purple-700 transition-colors text-sm font-medium"
-          aria-label={allCurrentMonthDaysSelected ? "Deselect all days in current month" : "Select all days in current month"}
-        >
-          {allCurrentMonthDaysSelected ? 'Deselect All Month' : 'Select All Month'}
-        </button>
+        <div className="grid grid-cols-2 gap-2">
+            <button
+            onClick={handleToggleMonthSelection}
+            className="w-full bg-purple-100 dark:bg-purple-800 text-purple-700 dark:text-white py-2 rounded-md hover:bg-purple-200 dark:hover:bg-purple-700 transition-colors text-sm font-medium"
+            aria-label={allCurrentMonthDaysSelected ? "Deselect all days in current month" : "Select all days in current month"}
+            >
+            {allCurrentMonthDaysSelected ? 'Deselect Month' : 'Select Month'}
+            </button>
+            <button
+            onClick={handleClearMonthSelection}
+            className="w-full bg-red-100 dark:bg-red-800/80 text-red-700 dark:text-red-200 py-2 rounded-md hover:bg-red-200 dark:hover:bg-red-700/80 transition-colors text-sm font-medium"
+            aria-label="Clear all selections in the current month"
+            >
+            Clear Month
+            </button>
+        </div>
         <button
           onClick={handleToggleCurrentWeekSelection}
-          disabled={!isViewingCurrentMonth} // FIX: Button is disabled if not viewing the current month.
+          disabled={!isViewingCurrentMonth}
           className="w-full bg-purple-100 dark:bg-purple-800 text-purple-700 dark:text-white py-2 rounded-md hover:bg-purple-200 dark:hover:bg-purple-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           aria-label={allCurrentWeekDaysSelected ? "Deselect all days in current week" : "Select all days in current week"}
         >
@@ -295,8 +308,8 @@ const Calendar: React.FC<CalendarProps> = ({ selectedDates, onDatesChange, curre
             onClick={() => handleWeekdayLabelClick(index)}
             role="button"
             aria-label={`Toggle selection for all ${day}s in ${monthNames[currentMonth.getMonth()]}`}
-            tabIndex={0} // Make it focusable
-            onKeyDown={(e) => { // Accessibility for keyboard users
+            tabIndex={0}
+            onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
                 handleWeekdayLabelClick(index);
@@ -308,7 +321,7 @@ const Calendar: React.FC<CalendarProps> = ({ selectedDates, onDatesChange, curre
         ))}
         {daysInCalendar.map((day, index) => {
           const dateIsoString = day.date.toISOString().split('T')[0];
-          const isSelected = selectedDates.has(dateIsoString); // Check against prop
+          const isSelected = selectedDates.has(dateIsoString);
           const holidayName = holidays?.get(dateIsoString);
           const today = new Date();
           const isToday = day.date.getDate() === today.getDate() &&
@@ -326,7 +339,7 @@ const Calendar: React.FC<CalendarProps> = ({ selectedDates, onDatesChange, curre
               onClick={(e) => day.isCurrentMonth && handleDayClick(day.date, e)}
               aria-pressed={isSelected}
               aria-label={day.date.toDateString()}
-              tabIndex={day.isCurrentMonth ? 0 : -1} // Make only current month days focusable
+              tabIndex={day.isCurrentMonth ? 0 : -1}
               role="gridcell"
             >
               <span className="z-10">{day.date.getDate()}</span>
@@ -334,14 +347,14 @@ const Calendar: React.FC<CalendarProps> = ({ selectedDates, onDatesChange, curre
                 <div 
                   className="absolute bottom-1 right-1 h-2 w-2 bg-red-500 rounded-full z-20 cursor-pointer"
                   onClick={(e) => {
-                    e.stopPropagation(); // Prevents day selection
+                    e.stopPropagation();
                     if (onHolidayClick) {
                       onHolidayClick(holidayName, day.date);
                     } else {
                       alert(holidayName);
                     }
                   }}
-                  title={holidayName} // Keep tooltip on the dot itself
+                  title={holidayName}
                 ></div>
               )}
             </div>

@@ -34,6 +34,12 @@ export interface RecommendationHistoryItem {
   report: string;
 }
 
+export interface SamplePathway {
+  id: string;
+  name: string;
+  eventIdentifiers: string[];
+}
+
 export interface UserProfile {
   bigoUserId: string;
   phoneNumber: string;
@@ -49,6 +55,7 @@ export interface UserProfile {
   currentForeignBeanCount?: number;
   preferredDates?: Set<string>; // New: Stores selected dates from the calendar as ISO strings
   recommendationHistory?: RecommendationHistoryItem[];
+  samplePathways?: SamplePathway[];
   allowEventAutoselection?: boolean;
   recommendationModel?: string;
   isMonthLocked?: boolean; // New: To persist calendar lock state
