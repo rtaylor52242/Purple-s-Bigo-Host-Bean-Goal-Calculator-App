@@ -154,17 +154,30 @@ const SettingsPage: React.FC = () => {
     }
   }, [user.maxPathways]);
   
+  // FIX: Refactored to use if/else with a type guard to resolve TypeScript error.
   const handleSortChange = (
     list: 'selected' | 'available',
     newKey: 'name' | 'time' | 'duration' | 'preferred' | 'beans'
   ) => {
-    const setSort = list === 'selected' ? setSelectedSort : setAvailableSort as React.Dispatch<React.SetStateAction<{ key: 'name' | 'time' | 'duration' | 'preferred' | 'beans', direction: 'asc' | 'desc' }>>;
-    setSort(prevSort => {
-      if (prevSort.key === newKey) {
-        return { ...prevSort, direction: prevSort.direction === 'asc' ? 'desc' : 'asc' };
-      }
-      return { key: newKey, direction: newKey === 'beans' ? 'desc' : 'asc' };
-    });
+    if (list === 'selected') {
+      // Type guard to ensure only valid keys are used for selectedSort
+      if (newKey === 'preferred' || newKey === 'beans') return;
+
+      setSelectedSort(prevSort => {
+        if (prevSort.key === newKey) {
+          return { ...prevSort, direction: prevSort.direction === 'asc' ? 'desc' : 'asc' };
+        }
+        // After type guard, newKey is 'name' | 'time' | 'duration'
+        return { key: newKey, direction: 'asc' };
+      });
+    } else { // list === 'available'
+      setAvailableSort(prevSort => {
+        if (prevSort.key === newKey) {
+          return { ...prevSort, direction: prevSort.direction === 'asc' ? 'desc' : 'asc' };
+        }
+        return { key: newKey, direction: newKey === 'beans' ? 'desc' : 'asc' };
+      });
+    }
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {

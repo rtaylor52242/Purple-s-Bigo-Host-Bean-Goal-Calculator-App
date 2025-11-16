@@ -9,57 +9,11 @@ import { getWeekDays } from '../utils/calendar';
 // It captures: 1. Event Name, 2. Date, 3. Time (12 or 24hr), 4. Duration
 const EVENT_LINE_REGEX = /- \s*(.+?)\s*\((\d{2}\/\d{2}\/\d{4})\)\s+at\s+([\d:]{3,5}\s*(?:AM|PM)?)\s+for\s+(\d+)\s*m/;
 
-const PrintableSchedule: React.FC<{ events: CalendarEvent[]; title: string; user: UserProfile; }> = ({ events, title, user }) => {
-  const groupedEvents = useMemo(() => {
-    const groups: { [key: string]: CalendarEvent[] } = {};
-    events.forEach(event => {
-      const dateKey = event.start.toISOString().split('T')[0];
-      if (!groups[dateKey]) {
-        groups[dateKey] = [];
-      }
-      groups[dateKey].push(event);
-    });
-    // Sort events within each group by start time
-    for (const key in groups) {
-      groups[key].sort((a, b) => a.start.getTime() - b.start.getTime());
-    }
-    return groups;
-  }, [events]);
-
-  const sortedDates = Object.keys(groupedEvents).sort();
-
-  return (
-    <div className="text-black">
-      <h1 className="text-3xl font-bold mb-4 text-center">{title}</h1>
-      <div className="space-y-6">
-        {sortedDates.map(dateKey => (
-          <div key={dateKey}>
-            <h2 className="text-xl font-semibold border-b border-gray-400 pb-2 mb-2">
-              {new Date(dateKey + 'T00:00:00Z').toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })}
-            </h2>
-            <ul className="space-y-2">
-              {groupedEvents[dateKey].map(event => (
-                <li key={event.id} className={`p-3 rounded-md border-l-4 bg-gray-50 ${event.status === 'confirmed' ? 'border-purple-500' : 'border-green-500'}`}>
-                  <p className="font-semibold">{event.title}</p>
-                  <p className="text-sm">
-                    {event.start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: user.timeZone || 'UTC' })}
-                    {' - '}
-                    {event.end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: user.timeZone || 'UTC' })}
-                  </p>
-                  <p className={`text-xs font-bold uppercase mt-1 ${event.status === 'confirmed' ? 'text-purple-600' : 'text-green-600'}`}>
-                    {event.status}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-        {events.length === 0 && <p className="text-center">No events to display.</p>}
-      </div>
-    </div>
-  );
-};
-
+const TrashIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+  </svg>
+);
 
 const SchedulePage: React.FC = () => {
   const { user, events, setEvents, setUser } = useAppContext();
@@ -370,6 +324,20 @@ const SchedulePage: React.FC = () => {
 
   }, [pathwaySlotsToSelect, setUser]);
 
+  const handleDeleteEventSlot = useCallback((slotIdentifier: string) => {
+    if (window.confirm("Are you sure you want to remove this event from your schedule? This will unselect it from your preferences.")) {
+        setUser(prevUser => {
+            const newPreferredSlots = new Map<string, SlotPreference>(prevUser.preferredSlots);
+            const slotPref = newPreferredSlots.get(slotIdentifier);
+            if (slotPref) {
+                // By setting isSelected to false, we are deselecting it
+                newPreferredSlots.set(slotIdentifier, { ...slotPref, isSelected: false });
+            }
+            return { ...prevUser, preferredSlots: newPreferredSlots };
+        });
+    }
+  }, [setUser]);
+
   const eventsToDisplay = useMemo(() => {
     // If a pathway is selected, show ONLY the events from that pathway.
     if (selectedPathwayKey) {
@@ -429,7 +397,7 @@ const SchedulePage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-center gap-4 p-4 bg-white dark:bg-[#1a1625] rounded-lg shadow-md border border-gray-200 dark:border-gray-700 print:hidden">
+      <div className="flex flex-col md:flex-row justify-between items-center gap-4 p-4 bg-white dark:bg-[#1a1625] rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Event Calendar</h1>
         
         <div className="flex items-center gap-4">
@@ -451,16 +419,10 @@ const SchedulePage: React.FC = () => {
             >
               Load Samples
             </button>
-             <button
-              onClick={() => window.print()}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              Print
-            </button>
         </div>
       </div>
 
-      <div className="bg-white dark:bg-[#1a1625] p-4 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 print:hidden">
+      <div className="bg-white dark:bg-[#1a1625] p-4 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
         <div className="flex flex-col md:flex-row items-center gap-4">
             <label htmlFor="pathway-select" className="font-medium text-sm flex-shrink-0">Visualize Pathway:</label>
             <select 
@@ -487,7 +449,7 @@ const SchedulePage: React.FC = () => {
         </div>
       </div>
       
-      <div className="bg-white dark:bg-[#1a1625] p-4 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 print:hidden">
+      <div className="bg-white dark:bg-[#1a1625] p-4 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
         <CalendarView 
           events={eventsToDisplay}
           eventDays={eventDays}
@@ -498,10 +460,6 @@ const SchedulePage: React.FC = () => {
           holidays={holidays}
           onHolidayClick={handleHolidayClick}
         />
-      </div>
-
-      <div className="hidden print:block">
-        <PrintableSchedule events={eventsToDisplay} title={`Schedule for ${headerTitle}`} user={user} />
       </div>
 
       {dayDetailModal.isOpen && dayDetailModal.date && (
@@ -522,16 +480,27 @@ const SchedulePage: React.FC = () => {
             <div className="max-h-[60vh] overflow-y-auto p-6 space-y-3">
               {eventsForModal.length > 0 ? (
                 eventsForModal.map(event => (
-                  <div key={event.id} className={`p-3 rounded-md border-l-4 ${event.status === 'confirmed' ? 'bg-purple-50 dark:bg-purple-900/30 border-purple-500' : 'bg-green-50 dark:bg-green-900/30 border-green-500'}`}>
-                    <p className="font-semibold text-gray-800 dark:text-gray-200">{event.title}</p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      {event.start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: user.timeZone || 'UTC' })}
-                      {' - '}
-                      {event.end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: user.timeZone || 'UTC' })}
-                    </p>
-                    <p className={`text-xs font-bold uppercase mt-1 ${event.status === 'confirmed' ? 'text-purple-600 dark:text-purple-400' : 'text-green-600 dark:text-green-400'}`}>
-                      {event.status}
-                    </p>
+                  <div key={event.id} className={`flex items-center justify-between p-3 rounded-md border-l-4 ${event.status === 'confirmed' ? 'bg-purple-50 dark:bg-purple-900/30 border-purple-500' : 'bg-green-50 dark:bg-green-900/30 border-green-500'}`}>
+                    <div>
+                      <p className="font-semibold text-gray-800 dark:text-gray-200">{event.title}</p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        {event.start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: user.timeZone || 'UTC' })}
+                        {' - '}
+                        {event.end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: user.timeZone || 'UTC' })}
+                      </p>
+                      <p className={`text-xs font-bold uppercase mt-1 ${event.status === 'confirmed' ? 'text-purple-600 dark:text-purple-400' : 'text-green-600 dark:text-green-400'}`}>
+                        {event.status}
+                      </p>
+                    </div>
+                     {event.status === 'confirmed' && (
+                        <button
+                          onClick={() => handleDeleteEventSlot(event.id)}
+                          className="p-2 rounded-full text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50"
+                          aria-label={`Delete event ${event.title}`}
+                        >
+                          <TrashIcon />
+                        </button>
+                      )}
                   </div>
                 ))
               ) : (

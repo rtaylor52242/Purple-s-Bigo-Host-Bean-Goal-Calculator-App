@@ -1,4 +1,3 @@
-
 import React, { useMemo } from 'react';
 import { CalendarEvent } from '../types';
 import { getMonthGrid, getWeekDays } from '../utils/calendar';
@@ -70,7 +69,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ events, eventDays, view, cu
                         ></div>
                       )}
                     </span>
-                    <div className="mt-1 space-y-1 text-xs overflow-y-auto print:overflow-visible">
+                    <div className="mt-1 space-y-1 text-xs overflow-y-auto">
                         {hasEvents && (
                           <div
                             className="p-1.5 rounded-md text-white truncate bg-blue-500 cursor-pointer hover:bg-blue-600 text-center font-semibold"
@@ -119,7 +118,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ events, eventDays, view, cu
                 </span>
               )}
 
-              <div className="mt-1 flex-grow space-y-1 text-xs overflow-y-auto print:overflow-visible">
+              <div className="mt-1 flex-grow space-y-1 text-xs overflow-y-auto">
                 {hasEvents && (
                   <div
                     className="p-1.5 rounded-md text-white truncate bg-blue-500 cursor-pointer hover:bg-blue-600 text-center font-semibold"
@@ -141,8 +140,8 @@ const CalendarView: React.FC<CalendarViewProps> = ({ events, eventDays, view, cu
 
 
   return (
-    <div className="flex flex-col h-full print:h-auto">
-        <div className="flex justify-between items-center p-2 border-b border-gray-200 dark:border-gray-700 print:hidden">
+    <div className="flex flex-col h-full">
+        <div className="flex justify-between items-center p-2 border-b border-gray-200 dark:border-gray-700">
             <button onClick={() => changeDate(-1)} className="px-3 py-1 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700">&lt;</button>
             <h2 className="text-lg font-semibold">{getHeaderTitle()}</h2>
             <button onClick={() => changeDate(1)} className="px-3 py-1 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700">&gt;</button>
@@ -155,8 +154,6 @@ const CalendarView: React.FC<CalendarViewProps> = ({ events, eventDays, view, cu
                 </div>
             ))}
         </div>
-
-        <div className="print:block hidden text-center p-4 text-2xl font-bold">{getHeaderTitle()}</div>
         {view === 'month' ? renderMonthView() : renderSimplifiedWeekOrDayView()}
     </div>
   );
