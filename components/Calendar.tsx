@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useCallback } from 'react';
 
 interface CalendarProps {
@@ -176,14 +175,6 @@ const Calendar: React.FC<CalendarProps> = ({ selectedDates, onDatesChange, curre
     handleToggleSelection(getCurrentMonthOnlyDays(), 'month');
   }, [getCurrentMonthOnlyDays, handleToggleSelection]);
 
-  const handleClearMonthSelection = useCallback(() => {
-    const newSelectedDates = new Set(selectedDates);
-    const currentMonthDays = getCurrentMonthOnlyDays();
-    currentMonthDays.forEach(dateIso => newSelectedDates.delete(dateIso));
-    onDatesChange(newSelectedDates);
-    setLastClickedDate(null);
-  }, [selectedDates, getCurrentMonthOnlyDays, onDatesChange]);
-
   const handleToggleCurrentWeekSelection = useCallback(() => {
     const fullWeekDaysIso = getDaysForActualCurrentWeek();
     handleToggleSelection(fullWeekDaysIso, 'week');
@@ -258,22 +249,13 @@ const Calendar: React.FC<CalendarProps> = ({ selectedDates, onDatesChange, curre
       </div>
       
       <div className="mb-4 space-y-2">
-        <div className="grid grid-cols-2 gap-2">
-            <button
-            onClick={handleToggleMonthSelection}
-            className="w-full bg-purple-100 dark:bg-purple-800 text-purple-700 dark:text-white py-2 rounded-md hover:bg-purple-200 dark:hover:bg-purple-700 transition-colors text-sm font-medium"
-            aria-label={allCurrentMonthDaysSelected ? "Deselect all days in current month" : "Select all days in current month"}
-            >
-            {allCurrentMonthDaysSelected ? 'Deselect Month' : 'Select Month'}
-            </button>
-            <button
-            onClick={handleClearMonthSelection}
-            className="w-full bg-red-100 dark:bg-red-800/80 text-red-700 dark:text-red-200 py-2 rounded-md hover:bg-red-200 dark:hover:bg-red-700/80 transition-colors text-sm font-medium"
-            aria-label="Clear all selections in the current month"
-            >
-            Clear Month
-            </button>
-        </div>
+        <button
+          onClick={handleToggleMonthSelection}
+          className="w-full bg-purple-100 dark:bg-purple-800 text-purple-700 dark:text-white py-2 rounded-md hover:bg-purple-200 dark:hover:bg-purple-700 transition-colors text-sm font-medium"
+          aria-label={allCurrentMonthDaysSelected ? "Deselect all days in current month" : "Select all days in current month"}
+        >
+          {allCurrentMonthDaysSelected ? 'Deselect Month' : 'Select Month'}
+        </button>
         <button
           onClick={handleToggleCurrentWeekSelection}
           disabled={!isViewingCurrentMonth}

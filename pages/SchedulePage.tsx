@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useCallback } from 'react';
 import { useAppContext } from '../App';
 import CalendarView from '../components/CalendarView';
@@ -361,13 +360,13 @@ const SchedulePage: React.FC = () => {
     }
     
     setUser(prevUser => {
-        const intermediateUser = { ...prevUser };
-        const newPreferredSlots = new Map<string, SlotPreference>(intermediateUser.preferredSlots);
+        const newPreferredSlots = new Map(prevUser.preferredSlots);
         pathwaySlotsToSelect.forEach((pref, identifier) => {
             newPreferredSlots.set(identifier, pref);
         });
-        intermediateUser.preferredSlots = newPreferredSlots;
-        return intermediateUser;
+        
+        const newUser = Object.assign({}, prevUser, { preferredSlots: newPreferredSlots });
+        return newUser;
     });
 
     alert(`${pathwaySlotsToSelect.size} event(s) from the selected pathway have been added to your selections!`);
@@ -382,10 +381,6 @@ const SchedulePage: React.FC = () => {
     return confirmedCalendarEvents;
   }, [selectedPathwayKey, pathwayEvents, confirmedCalendarEvents]);
   
-  const eventDays = useMemo(() => {
-    return new Set(eventsToDisplay.map(event => event.start.toISOString().split('T')[0]));
-  }, [eventsToDisplay]);
-
   const eventsForModal = useMemo(() => {
     if (!dayDetailModal.date) return [];
     const modalDate = dayDetailModal.date;
@@ -405,33 +400,6 @@ const SchedulePage: React.FC = () => {
   const handleCloseModal = useCallback(() => {
     setDayDetailModal({ isOpen: false, date: null });
   }, []);
-
-  const handleRemoveAllSlotsForDay = useCallback(() => {
-    if (!dayDetailModal.date) return;
-    
-    const confirmedEventsOnDay = eventsForModal.filter(e => e.status === 'confirmed');
-    if (confirmedEventsOnDay.length === 0) {
-      alert("No confirmed events to remove for this day.");
-      return;
-    }
-
-    if (window.confirm(`Are you sure you want to remove all ${confirmedEventsOnDay.length} confirmed event(s) from this day's schedule?`)) {
-      setUser(prevUser => {
-        const newPreferredSlots = new Map<string, SlotPreference>(prevUser.preferredSlots);
-        confirmedEventsOnDay.forEach(event => {
-          const pref = newPreferredSlots.get(event.id);
-          if (pref) {
-            newPreferredSlots.set(event.id, { 
-                isSelected: false, 
-                rewardTierIndex: pref.rewardTierIndex
-            });
-          }
-        });
-        return Object.assign({}, prevUser, { preferredSlots: newPreferredSlots });
-      });
-      handleCloseModal();
-    }
-  }, [dayDetailModal.date, eventsForModal, setUser, handleCloseModal]);
 
   const weekDays = useMemo(() => getWeekDays(currentDate), [currentDate]);
 
@@ -494,7 +462,6 @@ const SchedulePage: React.FC = () => {
       <div className="bg-white dark:bg-[#1a1625] p-4 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
         <CalendarView 
           events={eventsToDisplay}
-          eventDays={eventDays}
           onDayClick={handleDayClick}
           view={view}
           currentDate={currentDate}
@@ -521,23 +488,26 @@ const SchedulePage: React.FC = () => {
             </div>
             <div className="max-h-[60vh] overflow-y-auto p-6 space-y-3">
               {eventsForModal.length > 0 ? (
-                eventsForModal.map(event => (
-                  <div key={event.id} className={`flex items-center justify-between p-3 rounded-md border-l-4 ${event.status === 'confirmed' ? 'bg-purple-50 dark:bg-purple-900/30 border-purple-500' : 'bg-green-50 dark:bg-green-900/30 border-green-500'}`}>
-                    <div>
-                      <p className="font-semibold text-gray-800 dark:text-gray-200">{event.title}</p>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                eventsForModal.map((event, index) => (
+                  <div key={event.id} className={`flex items-start justify-between p-3 rounded-md border-l-4 ${event.status === 'confirmed' ? 'bg-purple-50 dark:bg-purple-900/30 border-purple-500' : 'bg-green-50 dark:bg-green-900/30 border-green-500'}`}>
+                    <div className="flex-grow">
+                      <p className="font-semibold text-gray-800 dark:text-gray-200">
+                        <span className="inline-block w-6 text-right mr-2 text-gray-500 dark:text-gray-400">{index + 1}.</span>
+                        {event.title}
+                      </p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 pl-8">
                         {event.start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: user.timeZone || 'UTC' })}
                         {' - '}
                         {event.end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: user.timeZone || 'UTC' })}
                       </p>
-                      <p className={`text-xs font-bold uppercase mt-1 ${event.status === 'confirmed' ? 'text-purple-600 dark:text-purple-400' : 'text-green-600 dark:text-green-400'}`}>
+                      <p className={`text-xs font-bold uppercase mt-1 pl-8 ${event.status === 'confirmed' ? 'text-purple-600 dark:text-purple-400' : 'text-green-600 dark:text-green-400'}`}>
                         {event.status}
                       </p>
                     </div>
                     {event.status === 'confirmed' && (
                       <button
                         onClick={() => handleRemoveSlot(event.id)}
-                        className="px-3 py-1 text-xs font-medium text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/50 rounded-md hover:bg-red-200 dark:hover:bg-red-800 transition-colors"
+                        className="px-3 py-1 text-xs font-medium text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/50 rounded-md hover:bg-red-200 dark:hover:bg-red-800 transition-colors flex-shrink-0 ml-4"
                         aria-label={`Remove ${event.title}`}
                       >
                         Remove
@@ -550,14 +520,6 @@ const SchedulePage: React.FC = () => {
               )}
             </div>
             <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
-                {eventsForModal.some(e => e.status === 'confirmed') && (
-                    <button
-                        onClick={handleRemoveAllSlotsForDay}
-                        className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
-                    >
-                        Remove All Confirmed
-                    </button>
-                )}
                 <button
                     onClick={handleCloseModal}
                     className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-200 dark:bg-gray-600 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-400"

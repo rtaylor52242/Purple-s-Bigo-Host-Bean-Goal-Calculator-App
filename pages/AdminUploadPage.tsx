@@ -390,7 +390,14 @@ const AdminUploadPage: React.FC = () => {
                                 {item.ocrResult && item.processedEvent && (
                                     <div>
                                         <p className="font-bold text-purple-600 dark:text-purple-400">{item.processedEvent.name}</p>
-                                        <h3 className="text-md font-medium text-gray-900 dark:text-white mt-3 mb-2">Select Available Time Slots</h3>
+                                        <div className="flex justify-between items-center mt-3 mb-2">
+                                            <h3 className="text-md font-medium text-gray-900 dark:text-white">Select Available Time Slots</h3>
+                                            {item.dateTimeSlots.length > 0 && (
+                                                <span className="text-xs font-semibold text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/50 px-2 py-1 rounded-full">
+                                                    {item.dateTimeSlots.length} {item.dateTimeSlots.length === 1 ? 'slot' : 'slots'} found
+                                                </span>
+                                            )}
+                                        </div>
                                         <div className="space-y-2 max-h-40 overflow-y-auto pr-2 text-sm">
                                             {item.dateTimeSlots.map((slot, index) => (
                                                 <label key={slot.id} className="flex items-center p-2 bg-white dark:bg-[#1a1625] rounded-md hover:bg-purple-50 dark:hover:bg-purple-900/50 cursor-pointer">

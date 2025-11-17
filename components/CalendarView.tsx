@@ -4,7 +4,6 @@ import { getMonthGrid, getWeekDays } from '../utils/calendar';
 
 interface CalendarViewProps {
   events: CalendarEvent[];
-  eventDays: Set<string>;
   view: 'month' | 'week' | 'day';
   currentDate: Date;
   onSetCurrentDate: (date: Date) => void;
@@ -13,9 +12,18 @@ interface CalendarViewProps {
   onDayClick?: (date: Date) => void;
 }
 
-const CalendarView: React.FC<CalendarViewProps> = ({ events, eventDays, view, currentDate, onSetCurrentDate, holidays, onHolidayClick, onDayClick }) => {
+const CalendarView: React.FC<CalendarViewProps> = ({ events, view, currentDate, onSetCurrentDate, holidays, onHolidayClick, onDayClick }) => {
   const monthGrid = useMemo(() => getMonthGrid(currentDate), [currentDate]);
   const weekDays = useMemo(() => getWeekDays(currentDate), [currentDate]);
+
+  const eventCountsByDay = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const event of events) {
+        const dayISO = event.start.toISOString().split('T')[0];
+        counts.set(dayISO, (counts.get(dayISO) || 0) + 1);
+    }
+    return counts;
+  }, [events]);
 
   const changeDate = (amount: number) => {
     const newDate = new Date(currentDate);
@@ -48,8 +56,10 @@ const CalendarView: React.FC<CalendarViewProps> = ({ events, eventDays, view, cu
   const renderMonthView = () => (
     <div className="grid grid-cols-7 grid-rows-6 flex-grow">
         {monthGrid.map((day, index) => {
-            const hasEvents = day.isCurrentMonth && eventDays.has(day.date.toISOString().split('T')[0]);
-            const holidayName = holidays?.get(day.date.toISOString().split('T')[0]);
+            const dayISO = day.date.toISOString().split('T')[0];
+            const eventCount = eventCountsByDay.get(dayISO) || 0;
+            const hasEvents = day.isCurrentMonth && eventCount > 0;
+            const holidayName = holidays?.get(dayISO);
             return (
                 <div key={index} className={`border-r border-b border-gray-200 dark:border-gray-700 p-2 flex flex-col ${day.isCurrentMonth ? '' : 'bg-gray-50 dark:bg-gray-800/20'}`}>
                     <span className={`relative font-medium ${isSameDay(day.date, today) ? 'text-purple-600 dark:text-purple-400 font-bold' : day.isCurrentMonth ? '' : 'text-gray-400 dark:text-gray-500'}`}>
@@ -80,7 +90,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ events, eventDays, view, cu
                                 }
                             }}
                           >
-                            Events
+                            ({eventCount}) {eventCount === 1 ? 'Event' : 'Events'}
                           </div>
                         )}
                     </div>
@@ -96,7 +106,8 @@ const CalendarView: React.FC<CalendarViewProps> = ({ events, eventDays, view, cu
       <div className="grid flex-grow" style={{ gridTemplateColumns: `repeat(${daysToRender.length}, 1fr)` }}>
         {daysToRender.map((day, dayIndex) => {
           const dayISO = day.toISOString().split('T')[0];
-          const hasEvents = eventDays.has(dayISO);
+          const eventCount = eventCountsByDay.get(dayISO) || 0;
+          const hasEvents = eventCount > 0;
           const holidayName = holidays?.get(dayISO);
 
           return (
@@ -127,7 +138,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ events, eventDays, view, cu
                       if (onDayClick) onDayClick(day);
                     }}
                   >
-                    Events
+                    ({eventCount}) {eventCount === 1 ? 'Event' : 'Events'}
                   </div>
                 )}
               </div>

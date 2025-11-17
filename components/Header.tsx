@@ -60,33 +60,43 @@ const Header: React.FC = () => {
                 <div>
                     <h3 className="text-lg font-semibold text-purple-600 dark:text-purple-400 mb-2">1. Event Uploads Page</h3>
                     <ul className="list-disc list-inside space-y-1 text-sm">
-                        <li>Start by uploading screenshots of your event schedules. You can upload multiple images at once.</li>
+                        <li>Start here by uploading screenshots of your event schedules. You can upload multiple images at once.</li>
                         <li>Click "Process Batch". The AI will analyze each image to extract event details like names, dates, times, and reward tiers.</li>
                         <li>Review the extracted details. You can select or deselect specific time slots for each event before finalizing.</li>
                         <li>Click "Confirm & Create All Valid Events" to add them to the app's available event pool.</li>
                         <li>Your past uploads are saved in the "Upload History" for quick re-importing.</li>
                     </ul>
                 </div>
-                <div>
+                 <div>
                     <h3 className="text-lg font-semibold text-purple-600 dark:text-purple-400 mb-2">2. Date Preferences Page</h3>
                     <ul className="list-disc list-inside space-y-1 text-sm">
                         <li>Use the interactive calendar to select the dates you prefer to stream.</li>
-                        <li>Click a date to select it. Click again to deselect. Use Shift-Click to select a range of dates.</li>
-                        <li>Use the quick-select buttons ("Select All Month", "Select Weekends", etc.) for faster selection.</li>
+                        <li>Click a date to select it, or Shift-Click to select a range. Use the header buttons (e.g., 'Sun', 'Mon') to select all of that weekday in the month.</li>
+                        <li>Use the quick-select buttons ("Select Month", "Select Weekends", etc.) for faster selection.</li>
+                        <li>Enable "Lock to Current Month" to prevent accidentally navigating to other months.</li>
                         <li>Your selected dates are used by the AI to create smarter recommendations on the Schedule page.</li>
                     </ul>
                 </div>
                 <div>
-                    <h3 className="text-lg font-semibold text-purple-600 dark:text-purple-400 mb-2">3. Schedule Page</h3>
+                    <h3 className="text-lg font-semibold text-purple-600 dark:text-purple-400 mb-2">3. Tier Chart Page</h3>
+                    <ul className="list-disc list-inside space-y-1 text-sm">
+                        <li>Upload a screenshot of your official Bigo regional tier chart.</li>
+                        <li>The AI will read the image and create an interactive table with your ranks, goals, and payouts.</li>
+                        <li>Click on any "Bean Goal" in the table to instantly set it as your "Monthly Bean Goal" on the Schedule page.</li>
+                        <li>You can export the data to a CSV file or reset the chart back to the app's default values.</li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 className="text-lg font-semibold text-purple-600 dark:text-purple-400 mb-2">4. Schedule Page</h3>
                     <ul className="list-disc list-inside space-y-1 text-sm">
                         <li><b>Profile & Goals:</b> Update your Bigo ID, phone number, current bean/hour counts, and monthly goal.</li>
-                        <li><b>Event Preferences:</b> Browse all available events (from your uploads). Check the box next to events you want to commit to. These become your "confirmed" schedule.</li>
-                        <li><b>Recommendations:</b> After selecting events, click "Process Recommendations". The AI will generate several strategic "pathways" to help you meet your goals.</li>
+                        <li><b>Event Preferences:</b> Browse all available events (from your uploads). Check the box next to events to add them to your "confirmed" schedule.</li>
+                        <li><b>Recommendations:</b> After selecting some events, click "Process Recommendations". The AI will generate several strategic "pathways" to help you meet your goals.</li>
                         <li>View, print, copy, or have the AI report read aloud to you.</li>
                     </ul>
                 </div>
                 <div>
-                    <h3 className="text-lg font-semibold text-purple-600 dark:text-purple-400 mb-2">4. Calendar Page</h3>
+                    <h3 className="text-lg font-semibold text-purple-600 dark:text-purple-400 mb-2">5. Calendar Page</h3>
                     <ul className="list-disc list-inside space-y-1 text-sm">
                         <li>This page provides a visual representation of your schedule.</li>
                         <li>By default, it shows your "confirmed" events (those you selected on the Schedule page).</li>
