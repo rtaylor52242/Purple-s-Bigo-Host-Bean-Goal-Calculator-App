@@ -61,6 +61,12 @@ const TierChartPage: React.FC = () => {
         throw new Error("No tier data could be extracted from the image.");
       }
       setRegionalTiers(result);
+      // After successful processing, reset the upload UI to allow another upload.
+      if (tierChartPreview) {
+        URL.revokeObjectURL(tierChartPreview);
+      }
+      setTierChartFile(null);
+      setTierChartPreview(null);
     } catch (err: any) {
       setTierChartError(err.message || "Failed to process tier chart.");
     } finally {

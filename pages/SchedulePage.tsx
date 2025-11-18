@@ -150,6 +150,26 @@ const SchedulePage: React.FC = () => {
     });
   }, [setUser]);
 
+  const handleClearAllEvents = useCallback(() => {
+    if (window.confirm("Are you sure you want to delete ALL events, selections, and pathways? This action cannot be undone.")) {
+      // Clear all events from the global state
+      setEvents([]);
+
+      // Clear all selections and pathways from the user's profile
+      setUser(prevUser => ({
+        ...prevUser,
+        preferredSlots: new Map<string, SlotPreference>(),
+        samplePathways: [],
+        recommendationHistory: [],
+      }));
+
+      // Also reset the pathway dropdown
+      setSelectedPathwayKey(null);
+
+      alert("All events, selections, and pathways have been cleared.");
+    }
+  }, [setEvents, setUser]);
+
 
   const confirmedCalendarEvents = useMemo<CalendarEvent[]>(() => {
     const calendarEvents: CalendarEvent[] = [];
@@ -406,7 +426,16 @@ const SchedulePage: React.FC = () => {
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-center gap-4 p-4 bg-white dark:bg-[#1a1625] rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Event Calendar</h1>
+        <div className="flex items-center gap-4">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Event Calendar</h1>
+            <button
+                onClick={handleClearAllEvents}
+                className="px-3 py-1.5 text-sm font-medium text-white bg-red-500 rounded-md hover:bg-red-600 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-800 focus:ring-red-500"
+                aria-label="Clear all events, selections, and pathways"
+            >
+                Clear All
+            </button>
+        </div>
         
         <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
