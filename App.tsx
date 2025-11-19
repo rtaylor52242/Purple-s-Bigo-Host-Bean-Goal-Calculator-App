@@ -22,14 +22,19 @@ const defaultInitialUser: UserProfile = {
   timeFormat: 'standard',
   timeZone: 'America/Los_Angeles',
   maxPathways: 10,
-  currentHours: 0, // Re-added
-  currentForeignBeanCount: 0, // Re-added
-  preferredDates: new Set<string>(), // Re-added
+  currentHours: 0,
+  currentForeignBeanCount: 0,
+  preferredDates: new Set<string>(),
   recommendationHistory: [],
   samplePathways: [],
   allowEventAutoselection: false,
   recommendationModel: 'gemini-2.5-pro',
-  isMonthLocked: true, // New: Default value for calendar lock
+  isMonthLocked: true,
+  emailConfig: {
+    serviceId: '',
+    templateId: '',
+    publicKey: ''
+  }
 };
 
 const initialEvents: Event[] = [];
@@ -66,8 +71,9 @@ const loadUserProfileFromLocalStorage = (): UserProfile => {
       if (!parsedUser.samplePathways || !Array.isArray(parsedUser.samplePathways)) {
         parsedUser.samplePathways = [];
       }
-      // Merge with default to ensure all fields are present, especially new ones
-      return { ...defaultInitialUser, ...parsedUser };
+      
+      // Merge with default to ensure all fields are present, including emailConfig
+      return { ...defaultInitialUser, ...parsedUser, emailConfig: { ...defaultInitialUser.emailConfig, ...parsedUser.emailConfig } };
     }
   } catch (error) {
     console.error("Failed to load user profile from localStorage:", error);
@@ -90,8 +96,8 @@ interface AppContextType {
   setAdminUploadState: React.Dispatch<React.SetStateAction<AdminUploadState>>;
   uploadHistory: UploadHistoryItem[];
   setUploadHistory: React.Dispatch<React.SetStateAction<UploadHistoryItem[]>>;
-  regionalTiers: RegionalTier[] | null; // Re-added
-  setRegionalTiers: React.Dispatch<React.SetStateAction<RegionalTier[] | null>>; // Re-added
+  regionalTiers: RegionalTier[] | null;
+  setRegionalTiers: React.Dispatch<React.SetStateAction<RegionalTier[] | null>>;
   theme: 'light' | 'dark';
   setTheme: React.Dispatch<React.SetStateAction<'light' | 'dark'>>;
 }
@@ -117,7 +123,7 @@ const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [adminUploadState, setAdminUploadState] = useState<AdminUploadState>(initialAdminUploadState);
   const [uploadHistory, setUploadHistory] = useState<UploadHistoryItem[]>([]);
-  const [regionalTiers, setRegionalTiers] = useState<RegionalTier[] | null>(defaultRegionalTiers); // Re-added
+  const [regionalTiers, setRegionalTiers] = useState<RegionalTier[] | null>(defaultRegionalTiers);
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
 
   useEffect(() => {
@@ -155,8 +161,8 @@ const App: React.FC = () => {
     setAdminUploadState,
     uploadHistory,
     setUploadHistory,
-    regionalTiers, // Re-added
-    setRegionalTiers, // Re-added
+    regionalTiers, 
+    setRegionalTiers,
     theme,
     setTheme,
   };

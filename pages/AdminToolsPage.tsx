@@ -33,7 +33,7 @@ const AdminToolsPage: React.FC = () => {
   };
   
   const handleSavePreferences = () => {
-    setSaveMessage("Date preferences saved!");
+    setSaveMessage("Configuration saved!");
     setTimeout(() => {
       setSaveMessage(null);
     }, 3000);
@@ -52,12 +52,23 @@ const AdminToolsPage: React.FC = () => {
     return Array.from(user.preferredDates).sort();
   }, [user.preferredDates]);
 
+  const handleEmailConfigChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setUser(prevUser => ({
+        ...prevUser,
+        emailConfig: {
+            ...(prevUser.emailConfig || { serviceId: '', templateId: '', publicKey: '' }),
+            [name]: value,
+        }
+    }));
+  };
+
   return (
-    <div className="flex flex-col items-center">
-      <div className="w-full max-w-4xl">
+    <div className="flex flex-col items-center pb-10">
+      <div className="w-full max-w-4xl space-y-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white text-center mb-8">Date Preferences</h1>
         
-        <div className="bg-white dark:bg-[#1a1625] p-6 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 mb-8">
+        <div className="bg-white dark:bg-[#1a1625] p-6 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Select Preferred Dates</h2>
             <div className="flex items-center">
@@ -126,20 +137,66 @@ const AdminToolsPage: React.FC = () => {
               </div>
             </div>
           </div>
-          <div className="flex justify-center mt-8 w-full max-w-lg mx-auto">
+        </div>
+
+        {/* EmailJS Configuration Section */}
+        <div className="bg-white dark:bg-[#1a1625] p-6 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
+            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">System Configuration</h2>
+            <h3 className="text-md font-medium text-purple-600 dark:text-purple-400 mb-3">EmailJS Settings</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                Configure these settings to enable the "Give Feedback" feature. You can find these keys in your EmailJS dashboard.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                    <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Service ID</label>
+                    <input 
+                        type="text" 
+                        name="serviceId" 
+                        value={user.emailConfig?.serviceId || ''} 
+                        onChange={handleEmailConfigChange} 
+                        className="w-full bg-gray-100 dark:bg-[#2a233a] border border-gray-300 dark:border-gray-600 rounded-md py-2 px-3 text-gray-900 dark:text-white focus:ring-purple-500 focus:border-purple-500"
+                        placeholder="service_..."
+                    />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Template ID</label>
+                    <input 
+                        type="text" 
+                        name="templateId" 
+                        value={user.emailConfig?.templateId || ''} 
+                        onChange={handleEmailConfigChange} 
+                        className="w-full bg-gray-100 dark:bg-[#2a233a] border border-gray-300 dark:border-gray-600 rounded-md py-2 px-3 text-gray-900 dark:text-white focus:ring-purple-500 focus:border-purple-500"
+                        placeholder="template_..."
+                    />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Public Key</label>
+                    <input 
+                        type="text" 
+                        name="publicKey" 
+                        value={user.emailConfig?.publicKey || ''} 
+                        onChange={handleEmailConfigChange} 
+                        className="w-full bg-gray-100 dark:bg-[#2a233a] border border-gray-300 dark:border-gray-600 rounded-md py-2 px-3 text-gray-900 dark:text-white focus:ring-purple-500 focus:border-purple-500"
+                        placeholder="User ID / Public Key"
+                    />
+                </div>
+            </div>
+        </div>
+
+        <div className="flex justify-center mt-8 w-full max-w-lg mx-auto">
             <button
               onClick={handleSavePreferences}
               className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold py-3 px-6 rounded-lg shadow-lg hover:from-purple-700 hover:to-indigo-700 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-900 focus:ring-indigo-500"
             >
-              Save Date Preferences
+              Save Configuration
             </button>
-          </div>
-          {saveMessage && (
+        </div>
+
+        {saveMessage && (
             <div className="fixed bottom-8 right-8 bg-green-500 text-white py-3 px-6 rounded-lg shadow-xl animate-fade-in-out z-50">
               {saveMessage}
             </div>
-          )}
-        </div>
+        )}
 
         {holidayModalInfo && (
           <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4" onClick={() => setHolidayModalInfo(null)}>

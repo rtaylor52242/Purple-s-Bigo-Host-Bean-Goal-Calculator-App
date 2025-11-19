@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAppContext } from '../App';
+import FeedbackModal from './FeedbackModal';
 
 const SunIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -25,6 +26,7 @@ const HelpIcon = () => (
 const Header: React.FC = () => {
   const { setIsAuthenticated, theme, setTheme } = useAppContext();
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
+  const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   
   const toggleTheme = () => {
     setTheme(prevTheme => prevTheme === 'dark' ? 'light' : 'dark');
@@ -36,6 +38,11 @@ const Header: React.FC = () => {
         ? 'bg-purple-100 text-purple-700 dark:bg-purple-800 dark:text-white'
         : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
     }`;
+
+  const handleOpenFeedback = () => {
+    setIsHelpModalOpen(false);
+    setIsFeedbackModalOpen(true);
+  };
 
   const HelpModal = () => (
     <div 
@@ -105,7 +112,13 @@ const Header: React.FC = () => {
                     </ul>
                 </div>
             </div>
-            <div className="p-4 border-t border-gray-200 dark:border-gray-700 text-right">
+            <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                <button
+                    onClick={handleOpenFeedback}
+                    className="text-sm text-purple-600 dark:text-purple-400 hover:underline focus:outline-none"
+                >
+                    Have a suggestion or found a bug? Give Feedback
+                </button>
                 <button 
                     onClick={() => setIsHelpModalOpen(false)} 
                     className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -174,6 +187,7 @@ const Header: React.FC = () => {
         </div>
       </header>
       {isHelpModalOpen && <HelpModal />}
+      <FeedbackModal isOpen={isFeedbackModalOpen} onClose={() => setIsFeedbackModalOpen(false)} />
     </>
   );
 };

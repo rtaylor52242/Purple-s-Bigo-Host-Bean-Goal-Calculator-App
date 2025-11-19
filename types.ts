@@ -1,3 +1,4 @@
+
 // FIX: Import Dispatch and SetStateAction from React to use in AppContextType.
 import type { Dispatch, SetStateAction } from 'react';
 
@@ -7,6 +8,7 @@ export interface RewardTier {
   description?: string;
 }
 
+// Re-added RegionalTier interface
 export interface RegionalTier {
   rank: string;
   goal: number;
@@ -40,6 +42,12 @@ export interface SamplePathway {
   eventIdentifiers: string[];
 }
 
+export interface EmailConfig {
+  serviceId: string;
+  templateId: string;
+  publicKey: string;
+}
+
 export interface UserProfile {
   bigoUserId: string;
   phoneNumber: string;
@@ -53,12 +61,13 @@ export interface UserProfile {
   maxPathways?: number;
   currentHours?: number;
   currentForeignBeanCount?: number;
-  preferredDates?: Set<string>; // New: Stores selected dates from the calendar as ISO strings
+  preferredDates?: Set<string>; // Stores selected dates from the calendar as ISO strings
   recommendationHistory?: RecommendationHistoryItem[];
   samplePathways?: SamplePathway[];
   allowEventAutoselection?: boolean;
   recommendationModel?: string;
-  isMonthLocked?: boolean; // New: To persist calendar lock state
+  isMonthLocked?: boolean;
+  emailConfig?: EmailConfig; // New: Stores EmailJS configuration
 }
 
 export interface EventSlot {
